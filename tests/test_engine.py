@@ -1,6 +1,6 @@
 import pytest
 
-from gems import Engine, init_game
+from gems import Engine
 from gems.typings import GameState
 
 
@@ -21,4 +21,4 @@ def test_engine_reset_changes_state():
 
 def test_init_game_invalid_count_raises():
   with pytest.raises(ValueError):
-    init_game(1)
+    Engine.create_game(1)
