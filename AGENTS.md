@@ -11,6 +11,10 @@ Use this as the single source of truth for how the engine will call into player 
 - Document edge cases, error handling, and determinism requirements.
 - Describe testing and evaluation harness suggestions.
 
+# Code style
+- All Python code should have indentation of 2 spaces per level.
+- You could run `uv add` to add some dependencies when needed.
+
 ## Contract (summary)
 
 An Agent is a Python object with the following minimal behavior:
@@ -178,6 +182,3 @@ If you'd like, I can:
 - Add a small test harness and a few pytest tests that run headless matches.
 
 Tell me which of those you'd like next and I'll implement them.
-
-# Code style
-- All Python code should have indentation of 2 spaces per level.
