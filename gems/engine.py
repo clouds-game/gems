@@ -113,7 +113,7 @@ class Engine:
     print("Bank:")
     for g, amt in self._state.bank:
       print(f"  {g}: {amt}")
-    print(f"Visible cards: {len(self._state.visible_cards)}")
+    print(f"Visible cards: {", ".join(str(c) for c in self._state.visible_cards)}")
 
   def load_and_shuffle_assets(self, path: Optional[str] = None, seed: Optional[int] = None) -> None:
     """Load assets from disk and shuffle them into decks on this Engine.

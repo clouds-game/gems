@@ -44,6 +44,12 @@ class Gem(Enum):
   def __str__(self) -> str:  # pragma: no cover - tiny convenience
     return self.value
 
+  def short_str(self) -> str:  # pragma: no cover - tiny convenience
+    if self == Gem.BLACK:
+      return 'K'  # avoid confusion with BLUE
+    if self == Gem.GOLD:
+      return 'D'  # avoid confusion with GREEN
+    return self.value[0].upper()
 
 @dataclass(frozen=True)
 class PlayerState:
@@ -129,6 +135,11 @@ class Card:
                points=d.get('points', 0), bonus=bonus, cost_in=cost,
                face_up=d.get('face_up', True), metadata_in=metadata)
 
+  def __str__(self) -> str:  # pragma: no cover - tiny convenience
+    bonus = self.bonus.short_str() if self.bonus else "N"
+    points = f"{self.points}" if self.points > 0 else ""
+    costs = "".join(f"{g.short_str()}{n}" for g, n in self.cost)
+    return f"Card([{self.level}]{bonus}{points}:{costs})"
 
 @dataclass(frozen=True)
 class Role:
