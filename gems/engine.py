@@ -65,3 +65,43 @@ if __name__ == "__main__":
   gs = init_game(3, ["Alice", "Bob", "Cara"])
   print("Initialized game state:\n")
   print_summary(gs)
+
+
+class Engine:
+  """A tiny, stateful wrapper around the engine helpers.
+
+  This class is intentionally small and suitable for development, tests,
+  and simple interactive sessions. It stores the current `GameState` and
+  exposes a couple of convenience methods:
+
+  - `reset(...)` to re-initialize the game
+  - `get_state()` to access the current immutable GameState
+  - `print_summary()` to display a human readable summary
+  """
+
+  def __init__(self, num_players: int = 2, names: Optional[List[str]] = None):
+    self._num_players = num_players
+    self._names = names
+    self._state = init_game(num_players, names)
+
+  def reset(self, num_players: Optional[int] = None, names: Optional[List[str]] = None) -> None:
+    """Reset the engine's internal GameState.
+
+    If `num_players` or `names` are omitted the values provided at
+    construction time are used.
+    """
+    if num_players is None:
+      num_players = self._num_players
+    if names is None:
+      names = self._names
+    self._state = init_game(num_players, names)
+    self._num_players = num_players
+    self._names = names
+
+  def get_state(self) -> GameState:
+    """Return the current (immutable) GameState object."""
+    return self._state
+
+  def print_summary(self) -> None:
+    """Print a human-friendly summary of the current GameState."""
+    print_summary(self._state)
