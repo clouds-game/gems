@@ -1,6 +1,6 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, InitVar
 from enum import Enum
-from typing import Any, Optional, Tuple, Iterable
+from typing import Any, Optional, Tuple, Iterable, Mapping, Union
 
 
 def _to_kv_tuple(v: Iterable):
@@ -94,14 +94,18 @@ class Card:
   level: int = 1
   points: int = 0
   bonus: Optional[Gem] = None
-  cost: Tuple[Tuple[Gem, int], ...] = field(default_factory=tuple)
+  # Accept iterator/mapping inputs at construction time; store immutable
+  # tuple-backed attributes for consumers.
+  cost_in: InitVar[Union[Iterable[Tuple[Gem, int]], Mapping[Gem, int]]] = ()
+  metadata_in: InitVar[Union[Iterable[Tuple[str, Any]], Mapping[str, Any]]] = ()
+  cost: Tuple[Tuple[Gem, int], ...] = field(init=False, default_factory=tuple)
   face_up: bool = True
-  metadata: Tuple[Tuple[str, Any], ...] = field(default_factory=tuple)
+  metadata: Tuple[Tuple[str, Any], ...] = field(init=False, default_factory=tuple)
 
-  def __post_init__(self):
+  def __post_init__(self, cost_in, metadata_in):
     # normalize cost and metadata into tuples so Card is always immutable
-    object.__setattr__(self, 'cost', _to_kv_tuple(self.cost))
-    object.__setattr__(self, 'metadata', _to_kv_tuple(self.metadata))
+    object.__setattr__(self, 'cost', _to_kv_tuple(cost_in))
+    object.__setattr__(self, 'metadata', _to_kv_tuple(metadata_in))
 
   def to_dict(self) -> dict:
     """Return a JSON-serializable dict representation of the Card."""
@@ -122,8 +126,8 @@ class Card:
     cost = tuple((Gem(g), n) for g, n in d.get('cost', ()))
     metadata = tuple(d.get('metadata', ()))
     return cls(id=d.get('id'), name=d.get('name'), level=d.get('level', 1),
-               points=d.get('points', 0), bonus=bonus, cost=cost,
-               face_up=d.get('face_up', True), metadata=metadata)
+               points=d.get('points', 0), bonus=bonus, cost_in=cost,
+               face_up=d.get('face_up', True), metadata_in=metadata)
 
 
 @dataclass(frozen=True)
@@ -136,12 +140,17 @@ class Role:
   id: Optional[str] = None
   name: Optional[str] = None
   points: int = 0
-  requirements: Tuple[Tuple[Gem, int], ...] = field(default_factory=tuple)
-  metadata: Tuple[Tuple[str, Any], ...] = field(default_factory=tuple)
+  # Accept iterator or mapping at construction time via InitVar; the
+  # public attributes `requirements` and `metadata` are always tuples.
+  requirements_in: InitVar[Union[Iterable[Tuple[Gem, int]], Mapping[Gem, int]]] = ()
+  metadata_in: InitVar[Union[Iterable[Tuple[str, Any]], Mapping[str, Any]]] = ()
+  requirements: Tuple[Tuple[Gem, int], ...] = field(init=False, default_factory=tuple)
+  metadata: Tuple[Tuple[str, Any], ...] = field(init=False, default_factory=tuple)
 
-  def __post_init__(self):
-    object.__setattr__(self, 'requirements', _to_kv_tuple(self.requirements))
-    object.__setattr__(self, 'metadata', _to_kv_tuple(self.metadata))
+  def __post_init__(self, requirements_in, metadata_in):
+    # normalize and store the tuple-backed public attributes
+    object.__setattr__(self, 'requirements', _to_kv_tuple(requirements_in))
+    object.__setattr__(self, 'metadata', _to_kv_tuple(metadata_in))
 
   def to_dict(self) -> dict:
     return {
@@ -157,4 +166,4 @@ class Role:
     reqs = tuple((Gem(g), n) for g, n in d.get('requirements', ()))
     metadata = tuple(d.get('metadata', ()))
     return cls(id=d.get('id'), name=d.get('name'), points=d.get('points', 0),
-               requirements=reqs, metadata=metadata)
+               requirements_in=reqs, metadata_in=metadata)
