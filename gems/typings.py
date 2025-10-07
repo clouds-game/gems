@@ -3,6 +3,18 @@ from enum import Enum
 from typing import Any, Optional, Tuple, Iterable
 
 
+def _to_kv_tuple(v: Iterable):
+  """Normalize a dict or iterable of pairs into a stable tuple of pairs."""
+  if isinstance(v, tuple):
+    return v
+  if isinstance(v, dict):
+    # sort dict items by stringified key so callers may pass either
+    # string keys or Gem enum keys without causing a TypeError from
+    # comparing Enum instances.
+    return tuple(sorted(v.items(), key=lambda kv: str(kv[0])))
+  return tuple(v)
+
+
 @dataclass(frozen=True)
 class Action:
   """A small, opaque Action object the engine and agents pass around.
@@ -64,17 +76,85 @@ class GameState:
     # normalize inputs into tuples where appropriate so the public
     # API is always immutable. Allow callers to provide dicts or
     # iterables; we try to be forgiving.
-    def _to_kv_tuple(v: Iterable):
-      if isinstance(v, tuple):
-        return v
-      if isinstance(v, dict):
-        # sort dict items by stringified key so callers may pass either
-        # string keys or Gem enum keys without causing a TypeError from
-        # comparing Enum instances.
-        return tuple(sorted(v.items(), key=lambda kv: str(kv[0])))
-      # assume iterable of pairs
-      return tuple(v)
-
     object.__setattr__(self, 'bank', _to_kv_tuple(self.bank))
     object.__setattr__(self, 'players', tuple(self.players))
     object.__setattr__(self, 'visible_cards', tuple(self.visible_cards))
+
+@dataclass(frozen=True)
+class Card:
+  """Represents a purchasable card in the game.
+
+  - `level` is a game-defined tier (1..3).
+  - `points` is the victory points the card provides.
+  - `bonus` is an optional Gem awarded permanently after purchase.
+  - `cost` is an immutable tuple of (Gem, amount) pairs.
+  """
+  id: Optional[str] = None
+  name: Optional[str] = None
+  level: int = 1
+  points: int = 0
+  bonus: Optional[Gem] = None
+  cost: Tuple[Tuple[Gem, int], ...] = field(default_factory=tuple)
+  face_up: bool = True
+  metadata: Tuple[Tuple[str, Any], ...] = field(default_factory=tuple)
+
+  def __post_init__(self):
+    # normalize cost and metadata into tuples so Card is always immutable
+    object.__setattr__(self, 'cost', _to_kv_tuple(self.cost))
+    object.__setattr__(self, 'metadata', _to_kv_tuple(self.metadata))
+
+  def to_dict(self) -> dict:
+    """Return a JSON-serializable dict representation of the Card."""
+    return {
+      'id': self.id,
+      'name': self.name,
+      'level': self.level,
+      'points': self.points,
+      'bonus': self.bonus.value if self.bonus is not None else None,
+      'cost': [(g.value, n) for g, n in self.cost],
+      'face_up': self.face_up,
+      'metadata': list(self.metadata),
+    }
+
+  @classmethod
+  def from_dict(cls, d: dict) -> 'Card':
+    bonus = Gem(d['bonus']) if d.get('bonus') is not None else None
+    cost = tuple((Gem(g), n) for g, n in d.get('cost', ()))
+    metadata = tuple(d.get('metadata', ()))
+    return cls(id=d.get('id'), name=d.get('name'), level=d.get('level', 1),
+               points=d.get('points', 0), bonus=bonus, cost=cost,
+               face_up=d.get('face_up', True), metadata=metadata)
+
+
+@dataclass(frozen=True)
+class Role:
+  """Represents a special role/noble with requirements and point reward.
+
+  The engine treats Role as read-only metadata awarded when a player
+  satisfies the `requirements` (a mapping of Gem -> required amount).
+  """
+  id: Optional[str] = None
+  name: Optional[str] = None
+  points: int = 0
+  requirements: Tuple[Tuple[Gem, int], ...] = field(default_factory=tuple)
+  metadata: Tuple[Tuple[str, Any], ...] = field(default_factory=tuple)
+
+  def __post_init__(self):
+    object.__setattr__(self, 'requirements', _to_kv_tuple(self.requirements))
+    object.__setattr__(self, 'metadata', _to_kv_tuple(self.metadata))
+
+  def to_dict(self) -> dict:
+    return {
+      'id': self.id,
+      'name': self.name,
+      'points': self.points,
+      'requirements': [(g.value, n) for g, n in self.requirements],
+      'metadata': list(self.metadata),
+    }
+
+  @classmethod
+  def from_dict(cls, d: dict) -> 'Role':
+    reqs = tuple((Gem(g), n) for g, n in d.get('requirements', ()))
+    metadata = tuple(d.get('metadata', ()))
+    return cls(id=d.get('id'), name=d.get('name'), points=d.get('points', 0),
+               requirements=reqs, metadata=metadata)
