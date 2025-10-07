@@ -30,6 +30,25 @@ class Engine:
     self._num_players = num_players
     self._names = names
     self._state = self.create_game(num_players, names)
+    # load and shuffle assets, then draw initial visible cards and roles
+    # default seed omitted for non-deterministic startup; callers can
+    # re-seed by calling `load_and_shuffle_assets` explicitly.
+    self.load_and_shuffle_assets()
+    # draw 4 cards for each level (1..3)
+    visible = []
+    for lvl in (1, 2, 3):
+      drawn = self.draw_from_deck(lvl, 4)
+      # drawn are popped in LIFO order; present them as top-first by
+      # reversing the drawn list so consumers see the top card first.
+      visible.extend(reversed(drawn))
+    # draw num_players + 1 roles and store separately
+    roles_to_draw = (num_players or 2) + 1
+    self.visible_roles = []
+    for _ in range(min(roles_to_draw, len(self.roles_deck))):
+      self.visible_roles.append(self.roles_deck.pop())
+    # update GameState.visible_cards to include the visible cards
+    self._state = GameState(players=self._state.players, bank=self._state.bank,
+                            visible_cards=tuple(visible), turn=self._state.turn)
 
   @staticmethod
   def create_game(num_players: int = 2, names: Optional[List[str]] = None) -> GameState:
