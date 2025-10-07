@@ -1,0 +1,10 @@
+{
+	"cards": [
+		{"id": "c1", "name": "Bronze Mine", "level": 1, "points": 0, "bonus": "red", "cost": [["blue", 1], ["white", 1]]},
+		{"id": "c2", "name": "Sapphire Vault", "level": 2, "points": 1, "bonus": "blue", "cost": [["red", 2], ["green", 1]]}
+	],
+	"roles": [
+		{"id": "r1", "name": "Duke", "points": 3, "requirements": [["red", 3], ["blue", 3]]},
+		{"id": "r2", "name": "Countess", "points": 2, "requirements": [["green", 4]]}
+	]
+}

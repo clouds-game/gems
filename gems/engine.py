@@ -10,7 +10,9 @@ entrypoint.
 
 from typing import List, Optional
 
-from .typings import GameState, PlayerState, Gem
+from .typings import GameState, PlayerState, Gem, Card, Role
+import json
+from pathlib import Path
 
 class Engine:
   """A tiny, stateful wrapper around the engine helpers.
@@ -93,3 +95,18 @@ class Engine:
     for g, amt in self._state.bank:
       print(f"  {g}: {amt}")
     print(f"Visible cards: {len(self._state.visible_cards)}")
+
+
+def load_assets(path: Optional[str] = None):
+  """Load cards and roles from a JSON config file and return (cards, roles).
+
+  The config file is expected to contain top-level `cards` and `roles` arrays
+  matching the `Card.from_dict` / `Role.from_dict` shapes.
+  """
+  p = Path(path) if path is not None else Path(__file__).parent / "assets" / "config.json"
+  with p.open('r', encoding='utf8') as fh:
+    j = json.load(fh)
+
+  cards = [Card.from_dict(c) for c in j.get('cards', [])]
+  roles = [Role.from_dict(r) for r in j.get('roles', [])]
+  return cards, roles
