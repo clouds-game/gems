@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import Any, Optional, Tuple, Iterable
 
 
@@ -15,6 +16,23 @@ class Action:
   payload: Tuple[Tuple[str, Any], ...] = field(default_factory=tuple)
 
 
+class Gem(Enum):
+  """Enumeration of gem/resource types used across the engine.
+
+  Values are the lowercase resource names used in serialization and
+  external APIs.
+  """
+  RED = "red"
+  BLUE = "blue"
+  WHITE = "white"
+  BLACK = "black"
+  GREEN = "green"
+  GOLD = "gold"
+
+  def __str__(self) -> str:  # pragma: no cover - tiny convenience
+    return self.value
+
+
 @dataclass(frozen=True)
 class PlayerState:
   """Public-per-player snapshot inside GameState.
@@ -23,7 +41,7 @@ class PlayerState:
   """
   seat_id: int
   name: Optional[str] = None
-  gems: Tuple[Tuple[str, int], ...] = field(default_factory=tuple)
+  gems: Tuple[Tuple[Gem, int], ...] = field(default_factory=tuple)
   score: int = 0
   reserved_cards: Tuple[Any, ...] = field(default_factory=tuple)
 
@@ -37,7 +55,7 @@ class GameState:
   """
   players: Tuple[PlayerState, ...]
   # bank is represented as an immutable tuple of (resource, amount).
-  bank: Tuple[Tuple[str, int], ...] = field(default_factory=tuple)
+  bank: Tuple[Tuple[Gem, int], ...] = field(default_factory=tuple)
   visible_cards: Tuple[Any, ...] = field(default_factory=tuple)
   turn: int = 0
   last_action: Optional[Action] = None
@@ -50,7 +68,10 @@ class GameState:
       if isinstance(v, tuple):
         return v
       if isinstance(v, dict):
-        return tuple(sorted(v.items()))
+        # sort dict items by stringified key so callers may pass either
+        # string keys or Gem enum keys without causing a TypeError from
+        # comparing Enum instances.
+        return tuple(sorted(v.items(), key=lambda kv: str(kv[0])))
       # assume iterable of pairs
       return tuple(v)
 
