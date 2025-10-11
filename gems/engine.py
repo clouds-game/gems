@@ -221,6 +221,12 @@ class Engine:
       for payment in payments:
         actions.append(BuyCardAction.create(card_id, payment=payment))
 
+    # If no actions were found, provide a NOOP fallback so callers (and
+    # agents/tests) always receive at least one action to consider. This
+    # simplifies external code which can assume a non-empty action list.
+    if not actions:
+      return [Action.noop()]
+
     return actions
 
 
