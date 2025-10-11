@@ -1,5 +1,6 @@
 from gems.actions import (
   Action,
+  NoopAction,
   Take3Action,
   Take2Action,
   BuyCardAction,
@@ -12,6 +13,12 @@ from gems.typings import (
 
 
 def test_action_constructors_basic():
+  a0 = Action.noop()
+  assert isinstance(a0, Action)
+  assert isinstance(a0, NoopAction)
+  assert a0.type == ActionType.NOOP
+  assert str(a0) == "Action.Noop()"
+
   a1 = Action.take3(Gem.RED, Gem.BLUE, Gem.GREEN)
   assert isinstance(a1, Action)
   assert isinstance(a1, Take3Action)

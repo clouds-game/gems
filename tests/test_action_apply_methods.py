@@ -3,6 +3,8 @@ from gems.actions import (
   Take2Action,
   BuyCardAction,
   ReserveCardAction,
+  NoopAction,
+  apply_action_and_advance,
 )
 from gems.typings import Gem, GameState, PlayerState, Card
 
@@ -55,6 +57,22 @@ def test_reserve_apply():
   # gold given if available
   gems = dict(p0.gems)
   assert gems.get(Gem.GOLD, 0) == 1
+
+
+def test_noop_and_advance_adjacent_to_reserve():
+  # ensure noop.apply does not change turn but apply_action_and_advance does
+  state = make_basic_state()
+  noop = NoopAction.create()
+  applied = noop.apply(state)
+  # apply should not advance the turn
+  assert applied.turn == state.turn
+  # last_action should be set to the noop
+  assert getattr(applied, 'last_action') == noop
+
+  # apply_action_and_advance should advance the turn by 1
+  advanced = apply_action_and_advance(state, noop)
+  assert advanced.turn == state.turn + 1
+  assert getattr(advanced, 'last_action') == noop
 
 
 def test_buy_apply_from_visible():

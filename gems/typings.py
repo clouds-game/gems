@@ -86,6 +86,7 @@ class ActionType(Enum):
   TAKE_2_SAME = "take_2_same"
   BUY_CARD = "buy_card"
   RESERVE_CARD = "reserve_card"
+  NOOP = "noop"
 
   def __str__(self) -> str:
     return self.value

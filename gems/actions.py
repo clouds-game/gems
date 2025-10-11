@@ -31,13 +31,19 @@ class Action(ABC):
   def reserve(cls, card_id: str, take_gold: bool = True) -> 'ReserveCardAction':
     return ReserveCardAction.create(card_id, take_gold=take_gold)
 
+  @classmethod
+  def noop(cls) -> 'NoopAction':
+    return NoopAction.create()
+
   @abstractmethod
   def apply(self, state: GameState) -> GameState:
     """Apply this action for the current-turn player and return a new GameState.
 
     Concrete action classes must implement this. Implementations must not
     mutate the provided `state` and must return a new GameState with
-    `turn` incremented and `last_action` set to this action.
+    `last_action` set to this action. Implementations MUST NOT modify
+    the `turn` field; turn advancement is the responsibility of the
+    caller/engine.
     """
 
 
@@ -83,7 +89,7 @@ class Take3Action(Action):
     new_bank = GemList(bank)
     new_visible = tuple(visible_cards)
     return GameState(players=tuple(players), bank=new_bank,
-                     visible_cards=new_visible, turn=state.turn + 1,
+                     visible_cards=new_visible, turn=state.turn,
                      last_action=self)
 
 
@@ -133,7 +139,7 @@ class Take2Action(Action):
     new_bank = GemList(bank)
     new_visible = tuple(visible_cards)
     return GameState(players=tuple(players), bank=new_bank,
-                     visible_cards=new_visible, turn=state.turn + 1,
+                     visible_cards=new_visible, turn=state.turn,
                      last_action=self)
 
 
@@ -213,7 +219,7 @@ class BuyCardAction(Action):
     new_bank = GemList(bank)
     new_visible = tuple(visible_cards)
     return GameState(players=tuple(players), bank=new_bank,
-                     visible_cards=new_visible, turn=state.turn + 1,
+                     visible_cards=new_visible, turn=state.turn,
                      last_action=self)
 
 
@@ -270,7 +276,7 @@ class ReserveCardAction(Action):
     new_bank = GemList(bank)
     new_visible = tuple(visible_cards)
     return GameState(players=tuple(players), bank=new_bank,
-                     visible_cards=new_visible, turn=state.turn + 1,
+                     visible_cards=new_visible, turn=state.turn,
                      last_action=self)
 
 
@@ -285,3 +291,34 @@ def apply_action(state: GameState, action: Action) -> GameState:
   sophisticated rule checks are intentionally left to higher-level code.
   """
   return action.apply(state)
+
+
+def apply_action_and_advance(state: GameState, action: Action) -> GameState:
+  """Apply `action` for the current-turn player and return a new GameState
+  with the turn advanced by one.
+
+  This helper calls the action's `apply` (which must not modify `turn`) and
+  then returns a copy with `turn` incremented by 1.
+  """
+  new_state = action.apply(state)
+  return GameState(players=new_state.players, bank=new_state.bank,
+                   visible_cards=new_state.visible_cards, turn=new_state.turn + 1,
+                   last_action=new_state.last_action)
+
+
+@dataclass(frozen=True)
+class NoopAction(Action):
+  """A no-op/fallback action that advances the turn without mutating state."""
+
+  @classmethod
+  def create(cls) -> 'NoopAction':
+    return cls(type=ActionType.NOOP)
+
+  def __str__(self) -> str:  # pragma: no cover - trivial
+    return "Action.Noop()"
+
+  def apply(self, state: GameState) -> GameState:
+    # simply return a new GameState with last_action set (do not modify turn)
+    return GameState(players=state.players, bank=state.bank,
+                     visible_cards=state.visible_cards, turn=state.turn,
+                     last_action=self)
