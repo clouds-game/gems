@@ -51,46 +51,72 @@ class ActionType(Enum):
 
 @dataclass(frozen=True)
 class Action:
-  """A small, opaque Action object the engine and agents pass around.
+  """Minimal base Action used as a type tag for polymorphism.
 
-  Keep it intentionally simple: a string `type` and a mapping-like `payload`.
-  It's frozen so agents/engine treat it as an immutable value object.
+  Concrete action types should subclass this and add strongly-typed
+  fields. Keeping this minimal lets engine and agents switch on
+  `type` safely.
   """
   type: ActionType
-  # payload is stored as a tuple of (key, value) pairs to keep the
-  # object fully immutable.
-  payload: Tuple[Tuple[str, Any], ...] = field(default_factory=tuple)
+
+  # Backwards-compatible convenience constructors forwarding to the
+  # concrete action dataclasses. These preserve prior call-site
+  # ergonomics while returning the new concrete types.
+  @classmethod
+  def take3(cls, *gems: Gem) -> 'Take3Action':
+    return Take3Action.create(*gems)
 
   @classmethod
-  def make(cls, type: ActionType, payload: Optional[Mapping[str, Any]] = None) -> 'Action':
-    """Construct an Action while normalizing the payload into an immutable tuple.
-
-    Accept either an ActionType or a string -- normalize to ActionType for the
-    stored value so consumers can rely on the typed enum.
-    """
-    payload = payload or {}
-    payload_t = _to_kv_tuple(payload)
-    return cls(type=type, payload=payload_t)
+  def take2(cls, gem: Gem, count: int = 2) -> 'Take2Action':
+    return Take2Action.create(gem, count)
 
   @classmethod
-  def take_3_different(cls, *gems: Gem) -> 'Action':
-    payload: dict = {'gems': tuple(gems)}
-    return cls.make(ActionType.TAKE_3_DIFFERENT, payload)
+  def buy(cls, card_id: str, payment: Optional[Mapping[Gem, int]] = None) -> 'BuyCardAction':
+    return BuyCardAction.create(card_id, payment=payment)
 
   @classmethod
-  def take_2_same(cls, gem: Gem, count: int = 2) -> 'Action':
-    return cls.make(ActionType.TAKE_2_SAME, {'gem': gem, 'count': count})
+  def reserve(cls, card_id: str, take_gold: bool = True) -> 'ReserveCardAction':
+    return ReserveCardAction.create(card_id, take_gold=take_gold)
+
+
+@dataclass(frozen=True)
+class Take3Action(Action):
+  gems: Tuple[Gem, ...] = field(default_factory=tuple)
 
   @classmethod
-  def buy_card(cls, card_id: str, payment: Optional[Mapping[Gem, int]] = None) -> 'Action':
-    payload: dict = {'card_id': card_id}
-    if payment is not None:
-      payload['payment'] = dict(payment)
-    return cls.make(ActionType.BUY_CARD, payload)
+  def create(cls, *gems: Gem) -> 'Take3Action':
+    return cls(type=ActionType.TAKE_3_DIFFERENT, gems=tuple(gems))
+
+
+@dataclass(frozen=True)
+class Take2Action(Action):
+  gem: Gem
+  count: int = 2
 
   @classmethod
-  def reserve_card(cls, card_id: str, take_gold: bool = True) -> 'Action':
-    return cls.make(ActionType.RESERVE_CARD, {'card_id': card_id, 'take_gold': bool(take_gold)})
+  def create(cls, gem: Gem, count: int = 2) -> 'Take2Action':
+    return cls(type=ActionType.TAKE_2_SAME, gem=gem, count=count)
+
+
+@dataclass(frozen=True)
+class BuyCardAction(Action):
+  card_id: str = ''
+  payment: Tuple[Tuple[Gem, int], ...] = field(default_factory=tuple)
+
+  @classmethod
+  def create(cls, card_id: str, payment: Optional[Mapping[Gem, int]] = None) -> 'BuyCardAction':
+    pay = _to_kv_tuple(dict(payment) if payment is not None else {})
+    return cls(type=ActionType.BUY_CARD, card_id=card_id, payment=pay)
+
+
+@dataclass(frozen=True)
+class ReserveCardAction(Action):
+  card_id: str = ''
+  take_gold: bool = True
+
+  @classmethod
+  def create(cls, card_id: str, take_gold: bool = True) -> 'ReserveCardAction':
+    return cls(type=ActionType.RESERVE_CARD, card_id=card_id, take_gold=bool(take_gold))
 
 
 @dataclass(frozen=True)

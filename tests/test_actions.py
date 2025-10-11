@@ -1,25 +1,36 @@
 from gems.typings import (
-    Action,
-    ActionType,
-    Gem,
+  Action,
+  Take3Action,
+  Take2Action,
+  BuyCardAction,
+  ReserveCardAction,
+  ActionType,
+  Gem,
 )
 
 
 def test_action_constructors_basic():
-  a1 = Action.take_3_different(Gem.RED, Gem.BLUE, Gem.GREEN)
+  a1 = Action.take3(Gem.RED, Gem.BLUE, Gem.GREEN)
   assert isinstance(a1, Action)
+  assert isinstance(a1, Take3Action)
   assert a1.type == ActionType.TAKE_3_DIFFERENT
-  assert ('gems', (Gem.RED, Gem.BLUE, Gem.GREEN)) in a1.payload
+  assert a1.gems == (Gem.RED, Gem.BLUE, Gem.GREEN)
 
-  a2 = Action.take_2_same(Gem.WHITE)
+  a2 = Action.take2(Gem.WHITE)
+  assert isinstance(a2, Action)
+  assert isinstance(a2, Take2Action)
   assert a2.type == ActionType.TAKE_2_SAME
-  assert ('gem', Gem.WHITE) in a2.payload
+  assert a2.gem == Gem.WHITE
 
-  a3 = Action.buy_card('card-1', payment={Gem.BLACK: 1, Gem.GOLD: 1})
+  a3 = Action.buy('card-1', payment={Gem.BLACK: 1, Gem.GOLD: 1})
+  assert isinstance(a3, Action)
+  assert isinstance(a3, BuyCardAction)
   assert a3.type == ActionType.BUY_CARD
-  assert ('card_id', 'card-1') in a3.payload
-  assert any(k == 'payment' for k, _ in a3.payload)
+  assert a3.card_id == 'card-1'
+  assert any(g == Gem.BLACK for g, _ in a3.payment)
 
-  a4 = Action.reserve_card('card-2', take_gold=True)
+  a4 = Action.reserve('card-2', take_gold=True)
+  assert isinstance(a4, Action)
+  assert isinstance(a4, ReserveCardAction)
   assert a4.type == ActionType.RESERVE_CARD
-  assert ('take_gold', True) in a4.payload
+  assert a4.take_gold is True

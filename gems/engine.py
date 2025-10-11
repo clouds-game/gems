@@ -11,7 +11,13 @@ entrypoint.
 from typing import List, Optional, Dict, Sequence
 
 from .typings import GameState, PlayerState, Gem, Card, Role
-from .typings import Action
+from .typings import (
+  Action,
+  Take3Action,
+  Take2Action,
+  BuyCardAction,
+  ReserveCardAction,
+)
 from pathlib import Path
 import random
 
@@ -190,17 +196,17 @@ class Engine:
     if len(available_gems) > 3:
       # simple approach: choose any 3-combination (order not important)
       for combo in combinations(available_gems, 3):
-        actions.append(Action.take_3_different(*combo))
+        actions.append(Take3Action.create(*combo))
     elif len(available_gems) != 0:
       # if fewer than 3 types available, allow taking all available types
-      actions.append(Action.take_3_different(*available_gems))
+      actions.append(Take3Action.create(*available_gems))
 
     # take_2_same: allow gems with at least 4 tokens in bank
     for g, amt in bank.items():
       if g == Gem.GOLD:
         continue
       if amt >= 4:
-        actions.append(Action.take_2_same(g, 2))
+        actions.append(Take2Action.create(g, 2))
 
     # reserve_card and buy_card for visible cards (if card has id); filter buy_card by affordability
     gold_in_bank = bank.get(Gem.GOLD, 0)
@@ -210,10 +216,10 @@ class Engine:
         continue
       # take a gold only if available
       take_gold = gold_in_bank > 0
-      actions.append(Action.reserve_card(card_id, take_gold=take_gold))
+      actions.append(ReserveCardAction.create(card_id, take_gold=take_gold))
       payments = can_afford(card, player)
       for payment in payments:
-        actions.append(Action.buy_card(card_id, payment=payment))
+        actions.append(BuyCardAction.create(card_id, payment=payment))
 
     return actions
 
