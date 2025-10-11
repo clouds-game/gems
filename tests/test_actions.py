@@ -1,9 +1,11 @@
-from gems.typings import (
+from gems.actions import (
   Action,
   Take3Action,
   Take2Action,
   BuyCardAction,
   ReserveCardAction,
+)
+from gems.typings import (
   ActionType,
   Gem,
 )

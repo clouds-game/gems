@@ -1,5 +1,6 @@
 from gems import Engine
-from gems.typings import Action, ActionType
+from gems.typings import ActionType
+from gems.actions import Action
 
 
 def test_get_legal_actions_basic():

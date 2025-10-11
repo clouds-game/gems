@@ -1,6 +1,9 @@
 from dataclasses import dataclass, field, InitVar
 from enum import Enum
-from typing import Any, Optional, Tuple, Iterable, Mapping, Union
+from typing import Any, Optional, Tuple, Iterable, Mapping, Union, TYPE_CHECKING
+
+if TYPE_CHECKING:
+  from .actions import Action
 
 
 def _to_kv_tuple(v: Iterable):
@@ -49,16 +52,8 @@ class ActionType(Enum):
     return self.value
 
 
-# Action classes moved to `gems.action` to keep typings focused. Import
-# them here so other modules can continue to import from
-# `gems.typings`.
-from .action import (
-  Action,
-  Take3Action,
-  Take2Action,
-  BuyCardAction,
-  ReserveCardAction,
-)
+# Action classes live in `gems.action`. Avoid importing them here to keep
+# these core typings independent from the action implementation.
 
 
 @dataclass(frozen=True)
@@ -206,7 +201,7 @@ class GameState:
   bank: Tuple[Tuple[Gem, int], ...] = field(default_factory=tuple)
   visible_cards: Tuple[Card, ...] = field(default_factory=tuple)
   turn: int = 0
-  last_action: Optional[Action] = None
+  last_action: Optional["Action"] = None
 
   def __post_init__(self):
     # normalize inputs into tuples where appropriate so the public
