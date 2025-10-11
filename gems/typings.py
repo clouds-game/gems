@@ -15,19 +15,6 @@ def _to_kv_tuple(v: Iterable):
   return tuple(v)
 
 
-@dataclass(frozen=True)
-class Action:
-  """A small, opaque Action object the engine and agents pass around.
-
-  Keep it intentionally simple: a string `type` and a mapping-like `payload`.
-  It's frozen so agents/engine treat it as an immutable value object.
-  """
-  type: str
-  # payload is stored as a tuple of (key, value) pairs to keep the
-  # object fully immutable.
-  payload: Tuple[Tuple[str, Any], ...] = field(default_factory=tuple)
-
-
 class Gem(Enum):
   """Enumeration of gem/resource types used across the engine.
 
@@ -50,6 +37,57 @@ class Gem(Enum):
     if self == Gem.GOLD:
       return 'D'  # avoid confusion with GREEN
     return self.value[0].upper()
+
+
+class ActionType(Enum):
+  TAKE_3_DIFFERENT = "take_3_different"
+  TAKE_2_SAME = "take_2_same"
+  BUY_CARD = "buy_card"
+  RESERVE_CARD = "reserve_card"
+
+  def __str__(self) -> str:
+    return self.value
+
+
+@dataclass(frozen=True)
+class Action:
+  """A small, opaque Action object the engine and agents pass around.
+
+  Keep it intentionally simple: a string `type` and a mapping-like `payload`.
+  It's frozen so agents/engine treat it as an immutable value object.
+  """
+  type: str
+  # payload is stored as a tuple of (key, value) pairs to keep the
+  # object fully immutable.
+  payload: Tuple[Tuple[str, Any], ...] = field(default_factory=tuple)
+
+  @classmethod
+  def make(cls, type: str, payload: Optional[Mapping[str, Any]] = None) -> 'Action':
+    """Construct an Action while normalizing the payload into an immutable tuple."""
+    payload = payload or {}
+    payload_t = _to_kv_tuple(payload)
+    return cls(type=type, payload=payload_t)
+
+  @classmethod
+  def take_3_different(cls, gems: list[Gem]) -> 'Action':
+    payload: dict = {'gems': gems}
+    return cls.make(ActionType.TAKE_3_DIFFERENT.value, payload)
+
+  @classmethod
+  def take_2_same(cls, gem: Gem, count: int = 2) -> 'Action':
+    return cls.make(ActionType.TAKE_2_SAME.value, {'gem': gem, 'count': count})
+
+  @classmethod
+  def buy_card(cls, card_id: str, payment: Optional[Mapping[Gem, int]] = None) -> 'Action':
+    payload: dict = {'card_id': card_id}
+    if payment is not None:
+      payload['payment'] = dict(payment)
+    return cls.make(ActionType.BUY_CARD.value, payload)
+
+  @classmethod
+  def reserve_card(cls, card_id: str, take_gold: bool = True) -> 'Action':
+    return cls.make(ActionType.RESERVE_CARD.value, {'card_id': card_id, 'take_gold': bool(take_gold)})
+
 
 @dataclass(frozen=True)
 class PlayerState:
@@ -86,6 +124,7 @@ class GameState:
     object.__setattr__(self, 'players', tuple(self.players))
     object.__setattr__(self, 'visible_cards', tuple(self.visible_cards))
 
+
 @dataclass(frozen=True)
 class Card:
   """Represents a purchasable card in the game.
@@ -116,14 +155,14 @@ class Card:
   def to_dict(self) -> dict:
     """Return a JSON-serializable dict representation of the Card."""
     return {
-      'id': self.id,
-      'name': self.name,
-      'level': self.level,
-      'points': self.points,
-      'bonus': self.bonus.value if self.bonus is not None else None,
-      'cost': [(g.value, n) for g, n in self.cost],
-      'face_up': self.face_up,
-      'metadata': list(self.metadata),
+        'id': self.id,
+        'name': self.name,
+        'level': self.level,
+        'points': self.points,
+        'bonus': self.bonus.value if self.bonus is not None else None,
+        'cost': [(g.value, n) for g, n in self.cost],
+        'face_up': self.face_up,
+        'metadata': list(self.metadata),
     }
 
   @classmethod
@@ -140,6 +179,7 @@ class Card:
     points = f"{self.points}" if self.points > 0 else ""
     costs = "".join(f"{g.short_str()}{n}" for g, n in self.cost)
     return f"Card([{self.level}]{bonus}{points}:{costs})"
+
 
 @dataclass(frozen=True)
 class Role:
@@ -165,11 +205,11 @@ class Role:
 
   def to_dict(self) -> dict:
     return {
-      'id': self.id,
-      'name': self.name,
-      'points': self.points,
-      'requirements': [(g.value, n) for g, n in self.requirements],
-      'metadata': list(self.metadata),
+        'id': self.id,
+        'name': self.name,
+        'points': self.points,
+        'requirements': [(g.value, n) for g, n in self.requirements],
+        'metadata': list(self.metadata),
     }
 
   @classmethod
