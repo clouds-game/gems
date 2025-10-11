@@ -1,8 +1,8 @@
 from dataclasses import dataclass, field
-from typing import Optional, Mapping, Tuple, Dict, Iterable
+from typing import Optional, Mapping, Tuple
 from abc import ABC, abstractmethod
 
-from .typings import Gem, ActionType, _to_kv_tuple, GameState, PlayerState, Card, GemList
+from .typings import Gem, ActionType, GameState, PlayerState, GemList
 
 
 @dataclass(frozen=True)
@@ -15,9 +15,6 @@ class Action(ABC):
   """
   type: ActionType
 
-  # Backwards-compatible convenience constructors forwarding to the
-  # concrete action dataclasses. These preserve prior call-site
-  # ergonomics while returning the new concrete types.
   @classmethod
   def take3(cls, *gems: Gem) -> 'Take3Action':
     return Take3Action.create(*gems)
@@ -64,9 +61,9 @@ class Take3Action(Action):
     seat = state.turn % num_players
     player = state.players[seat]
 
-    # Mutable working copies
-    bank = _kv_tuple_to_dict(state.bank)
-    player_gems = _kv_tuple_to_dict(player.gems)
+    # Mutable working copies: convert GemList/tuples into mutable dicts/lists
+    bank = dict(state.bank)
+    player_gems = dict(player.gems)
     visible_cards = list(state.visible_cards)
     players = list(state.players)
 
@@ -78,12 +75,12 @@ class Take3Action(Action):
       player_gems[g] = player_gems.get(g, 0) + 1
 
     new_player = PlayerState(seat_id=player.seat_id, name=player.name,
-                             gems=_dict_to_kv_tuple(player_gems), score=player.score,
+                             gems=GemList(player_gems), score=player.score,
                              reserved_cards=tuple(player.reserved_cards),
                              purchased_cards_in=tuple(player.purchased_cards))
     players[seat] = new_player
 
-    new_bank = _dict_to_kv_tuple(bank)
+    new_bank = GemList(bank)
     new_visible = tuple(visible_cards)
     return GameState(players=tuple(players), bank=new_bank,
                      visible_cards=new_visible, turn=state.turn + 1,
@@ -112,9 +109,9 @@ class Take2Action(Action):
     seat = state.turn % num_players
     player = state.players[seat]
 
-    # Mutable working copies
-    bank = _kv_tuple_to_dict(state.bank)
-    player_gems = _kv_tuple_to_dict(player.gems)
+    # Mutable working copies: convert GemList/tuples into mutable dicts/lists
+    bank = dict(state.bank)
+    player_gems = dict(player.gems)
     visible_cards = list(state.visible_cards)
     players = list(state.players)
 
@@ -128,12 +125,12 @@ class Take2Action(Action):
     player_gems[gem] = player_gems.get(gem, 0) + count
 
     new_player = PlayerState(seat_id=player.seat_id, name=player.name,
-                             gems=_dict_to_kv_tuple(player_gems), score=player.score,
+                             gems=GemList(player_gems), score=player.score,
                              reserved_cards=tuple(player.reserved_cards),
                              purchased_cards_in=tuple(player.purchased_cards))
     players[seat] = new_player
 
-    new_bank = _dict_to_kv_tuple(bank)
+    new_bank = GemList(bank)
     new_visible = tuple(visible_cards)
     return GameState(players=tuple(players), bank=new_bank,
                      visible_cards=new_visible, turn=state.turn + 1,
@@ -147,7 +144,7 @@ class BuyCardAction(Action):
 
   @classmethod
   def create(cls, card_id: str, payment: Optional[Mapping[Gem, int]] = None) -> 'BuyCardAction':
-    pay = GemList(_to_kv_tuple(dict(payment) if payment is not None else {}))
+    pay = GemList(dict(payment) if payment is not None else {})
     return cls(type=ActionType.BUY_CARD, card_id=card_id, payment=pay)
 
   def __str__(self) -> str:
@@ -163,8 +160,8 @@ class BuyCardAction(Action):
     player = state.players[seat]
 
     # Mutable working copies
-    bank = _kv_tuple_to_dict(state.bank)
-    player_gems = _kv_tuple_to_dict(player.gems)
+    bank = dict(state.bank)
+    player_gems = dict(player.gems)
     visible_cards = list(state.visible_cards)
     players = list(state.players)
 
@@ -208,12 +205,12 @@ class BuyCardAction(Action):
       new_reserved = tuple(player.reserved_cards)
 
     new_player = PlayerState(seat_id=player.seat_id, name=player.name,
-                             gems=_dict_to_kv_tuple(player_gems), score=new_score,
+                             gems=GemList(player_gems), score=new_score,
                              reserved_cards=new_reserved,
                              purchased_cards_in=new_purchased)
     players[seat] = new_player
 
-    new_bank = _dict_to_kv_tuple(bank)
+    new_bank = GemList(bank)
     new_visible = tuple(visible_cards)
     return GameState(players=tuple(players), bank=new_bank,
                      visible_cards=new_visible, turn=state.turn + 1,
@@ -243,8 +240,8 @@ class ReserveCardAction(Action):
     player = state.players[seat]
 
     # Mutable working copies
-    bank = _kv_tuple_to_dict(state.bank)
-    player_gems = _kv_tuple_to_dict(player.gems)
+    bank = dict(state.bank)
+    player_gems = dict(player.gems)
     visible_cards = list(state.visible_cards)
     players = list(state.players)
 
@@ -265,27 +262,16 @@ class ReserveCardAction(Action):
     # create new player with reserved card added
     new_reserved = tuple(player.reserved_cards) + (found,)
     new_player = PlayerState(seat_id=player.seat_id, name=player.name,
-                             gems=_dict_to_kv_tuple(player_gems), score=player.score,
+                             gems=GemList(player_gems), score=player.score,
                              reserved_cards=new_reserved,
                              purchased_cards_in=tuple(player.purchased_cards))
     players[seat] = new_player
 
-    new_bank = _dict_to_kv_tuple(bank)
+    new_bank = GemList(bank)
     new_visible = tuple(visible_cards)
     return GameState(players=tuple(players), bank=new_bank,
                      visible_cards=new_visible, turn=state.turn + 1,
                      last_action=self)
-
-
-def _kv_tuple_to_dict(t: Iterable[Tuple[Gem, int]]) -> Dict[Gem, int]:
-  # accept GemList or iterable of pairs
-  if isinstance(t, GemList):
-    t = t.as_tuple()
-  return {g: n for g, n in t}
-
-
-def _dict_to_kv_tuple(d: Mapping[Gem, int]) -> GemList:
-  return GemList(_to_kv_tuple(dict(d)))
 
 
 def apply_action(state: GameState, action: Action) -> GameState:
