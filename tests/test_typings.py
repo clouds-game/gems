@@ -20,3 +20,21 @@ def test_role_roundtrip():
   assert r2.id == r.id
   assert r2.points == r.points
   assert tuple(r2.requirements) == tuple(r.requirements)
+
+
+def test_playerstate_discounts_empty_and_aggregate():
+  # empty purchased cards -> no discounts
+  from gems.typings import PlayerState
+  p0 = PlayerState(seat_id=0, purchased_cards_in=[])
+  assert tuple(p0.purchased_cards) == ()
+  assert tuple(p0.discounts) == ()
+
+  # purchased cards with bonuses should aggregate discounts per Gem
+  c1 = Card(id='a', bonus=Gem.GREEN)
+  c2 = Card(id='b', bonus=Gem.GREEN)
+  c3 = Card(id='c', bonus=Gem.RED)
+  p1 = PlayerState(seat_id=1, purchased_cards_in=[c1, c2, c3])
+  # discounts is a tuple of (Gem, count) pairs; convert to dict for easy asserts
+  discounts_map = dict(p1.discounts)
+  assert discounts_map[Gem.GREEN] == 2
+  assert discounts_map[Gem.RED] == 1

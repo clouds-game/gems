@@ -194,7 +194,32 @@ class PlayerState:
   name: Optional[str] = None
   gems: Tuple[Tuple[Gem, int], ...] = field(default_factory=tuple)
   score: int = 0
+  # cards the player has reserved but not yet purchased
   reserved_cards: Tuple[Card, ...] = field(default_factory=tuple)
+  # cards the player has purchased (permanent bonuses / points)
+  purchased_cards_in: InitVar[Iterable[Card]] = ()
+  purchased_cards: Tuple[Card, ...] = field(init=False, default_factory=tuple)
+  # per-gem permanent discounts are derived from purchased_cards: each
+  # purchased card may have a `bonus` Gem that gives a permanent -1 cost
+  # for that Gem. `discounts` stores the aggregated counts as an
+  # immutable tuple of (Gem, amount) pairs.
+  discounts: Tuple[Tuple[Gem, int], ...] = field(init=False, default_factory=tuple)
+
+  def __post_init__(self, purchased_cards_in):
+    # normalize reserved_cards and purchased_cards into tuples so the
+    # public attributes remain immutable even when callers pass lists.
+    object.__setattr__(self, 'reserved_cards', tuple(self.reserved_cards))
+    purchased = tuple(purchased_cards_in)
+    object.__setattr__(self, 'purchased_cards', purchased)
+
+    # Build discounts by counting bonuses on purchased cards.
+    counts: dict = {}
+    for c in purchased:
+      if getattr(c, 'bonus', None) is not None:
+        counts[c.bonus] = counts.get(c.bonus, 0) + 1
+    # normalize into the same stable tuple-of-pairs format used elsewhere
+    object.__setattr__(self, 'discounts', _to_kv_tuple(counts))
+
 
 
 @dataclass(frozen=True)
