@@ -9,7 +9,7 @@ def test_get_legal_actions_basic():
   assert isinstance(actions, list)
   # we expect at least one take_3_different or take_2_same or reserve_card
   types = {a.type for a in actions}
-  assert 'take_3_different' in types or 'take_2_same' in types or 'reserve_card' in types
+  assert ActionType.TAKE_3_DIFFERENT in types or ActionType.TAKE_2_SAME in types or ActionType.RESERVE_CARD in types
 
 
 def test_buy_card_included_when_affordable():
@@ -25,7 +25,7 @@ def test_buy_card_included_when_affordable():
   e._state = state
 
   actions = e.get_legal_actions(seat_id=0)
-  assert any(a.type == ActionType.BUY_CARD.value for a in actions)
+  assert any(a.type == ActionType.BUY_CARD for a in actions)
 
 
 def test_buy_card_not_included_when_unaffordable_but_included_with_gold():
@@ -39,7 +39,7 @@ def test_buy_card_not_included_when_unaffordable_but_included_with_gold():
   state = GameState(players=(p0, p1), bank=e.get_state().bank, visible_cards=(card,), turn=0)
   e._state = state
   actions = e.get_legal_actions(seat_id=0)
-  assert not any(a.type == ActionType.BUY_CARD.value for a in actions)
+  assert not any(a.type == ActionType.BUY_CARD for a in actions)
 
   # now give player a gold to allow substitution
   p0_with_gold = PlayerState(seat_id=0, gems=((Gem.BLACK, 2), (Gem.GOLD, 1)))
@@ -47,7 +47,7 @@ def test_buy_card_not_included_when_unaffordable_but_included_with_gold():
                      visible_cards=(card,), turn=0)
   e._state = state2
   actions2 = e.get_legal_actions(seat_id=0)
-  assert any(a.type == ActionType.BUY_CARD.value for a in actions2)
+  assert any(a.type == ActionType.BUY_CARD for a in actions2)
 
 
 def test_gold_allows_multiple_payment_combinations():
@@ -76,4 +76,4 @@ def test_gold_allows_multiple_payment_combinations():
 
   # ensure buy_card action is included
   actions = e.get_legal_actions(seat_id=0)
-  assert any(a.type == ActionType.BUY_CARD.value for a in actions)
+  assert any(a.type == ActionType.BUY_CARD for a in actions)

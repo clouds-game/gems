@@ -190,10 +190,10 @@ class Engine:
     if len(available_gems) > 3:
       # simple approach: choose any 3-combination (order not important)
       for combo in combinations(available_gems, 3):
-        actions.append(Action.take_3_different(list(combo)))
+        actions.append(Action.take_3_different(*combo))
     elif len(available_gems) != 0:
       # if fewer than 3 types available, allow taking all available types
-      actions.append(Action.take_3_different(available_gems))
+      actions.append(Action.take_3_different(*available_gems))
 
     # take_2_same: allow gems with at least 4 tokens in bank
     for g, amt in bank.items():

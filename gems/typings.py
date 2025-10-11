@@ -56,37 +56,41 @@ class Action:
   Keep it intentionally simple: a string `type` and a mapping-like `payload`.
   It's frozen so agents/engine treat it as an immutable value object.
   """
-  type: str
+  type: ActionType
   # payload is stored as a tuple of (key, value) pairs to keep the
   # object fully immutable.
   payload: Tuple[Tuple[str, Any], ...] = field(default_factory=tuple)
 
   @classmethod
-  def make(cls, type: str, payload: Optional[Mapping[str, Any]] = None) -> 'Action':
-    """Construct an Action while normalizing the payload into an immutable tuple."""
+  def make(cls, type: ActionType, payload: Optional[Mapping[str, Any]] = None) -> 'Action':
+    """Construct an Action while normalizing the payload into an immutable tuple.
+
+    Accept either an ActionType or a string -- normalize to ActionType for the
+    stored value so consumers can rely on the typed enum.
+    """
     payload = payload or {}
     payload_t = _to_kv_tuple(payload)
     return cls(type=type, payload=payload_t)
 
   @classmethod
-  def take_3_different(cls, gems: list[Gem]) -> 'Action':
-    payload: dict = {'gems': gems}
-    return cls.make(ActionType.TAKE_3_DIFFERENT.value, payload)
+  def take_3_different(cls, *gems: Gem) -> 'Action':
+    payload: dict = {'gems': tuple(gems)}
+    return cls.make(ActionType.TAKE_3_DIFFERENT, payload)
 
   @classmethod
   def take_2_same(cls, gem: Gem, count: int = 2) -> 'Action':
-    return cls.make(ActionType.TAKE_2_SAME.value, {'gem': gem, 'count': count})
+    return cls.make(ActionType.TAKE_2_SAME, {'gem': gem, 'count': count})
 
   @classmethod
   def buy_card(cls, card_id: str, payment: Optional[Mapping[Gem, int]] = None) -> 'Action':
     payload: dict = {'card_id': card_id}
     if payment is not None:
       payload['payment'] = dict(payment)
-    return cls.make(ActionType.BUY_CARD.value, payload)
+    return cls.make(ActionType.BUY_CARD, payload)
 
   @classmethod
   def reserve_card(cls, card_id: str, take_gold: bool = True) -> 'Action':
-    return cls.make(ActionType.RESERVE_CARD.value, {'card_id': card_id, 'take_gold': bool(take_gold)})
+    return cls.make(ActionType.RESERVE_CARD, {'card_id': card_id, 'take_gold': bool(take_gold)})
 
 
 @dataclass(frozen=True)
