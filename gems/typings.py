@@ -90,42 +90,6 @@ class Action:
 
 
 @dataclass(frozen=True)
-class PlayerState:
-  """Public-per-player snapshot inside GameState.
-
-  Minimal fields used by agents/engine. Implementations may extend this.
-  """
-  seat_id: int
-  name: Optional[str] = None
-  gems: Tuple[Tuple[Gem, int], ...] = field(default_factory=tuple)
-  score: int = 0
-  reserved_cards: Tuple[Any, ...] = field(default_factory=tuple)
-
-
-@dataclass(frozen=True)
-class GameState:
-  """A read-only view of the full public game state.
-
-  Fields are converted to immutable tuples so agents can safely treat the
-  object as read-only.
-  """
-  players: Tuple[PlayerState, ...]
-  # bank is represented as an immutable tuple of (resource, amount).
-  bank: Tuple[Tuple[Gem, int], ...] = field(default_factory=tuple)
-  visible_cards: Tuple[Any, ...] = field(default_factory=tuple)
-  turn: int = 0
-  last_action: Optional[Action] = None
-
-  def __post_init__(self):
-    # normalize inputs into tuples where appropriate so the public
-    # API is always immutable. Allow callers to provide dicts or
-    # iterables; we try to be forgiving.
-    object.__setattr__(self, 'bank', _to_kv_tuple(self.bank))
-    object.__setattr__(self, 'players', tuple(self.players))
-    object.__setattr__(self, 'visible_cards', tuple(self.visible_cards))
-
-
-@dataclass(frozen=True)
 class Card:
   """Represents a purchasable card in the game.
 
@@ -218,3 +182,39 @@ class Role:
     metadata = tuple(d.get('metadata', ()))
     return cls(id=d.get('id'), name=d.get('name'), points=d.get('points', 0),
                requirements_in=reqs, metadata_in=metadata)
+
+
+@dataclass(frozen=True)
+class PlayerState:
+  """Public-per-player snapshot inside GameState.
+
+  Minimal fields used by agents/engine. Implementations may extend this.
+  """
+  seat_id: int
+  name: Optional[str] = None
+  gems: Tuple[Tuple[Gem, int], ...] = field(default_factory=tuple)
+  score: int = 0
+  reserved_cards: Tuple[Card, ...] = field(default_factory=tuple)
+
+
+@dataclass(frozen=True)
+class GameState:
+  """A read-only view of the full public game state.
+
+  Fields are converted to immutable tuples so agents can safely treat the
+  object as read-only.
+  """
+  players: Tuple[PlayerState, ...]
+  # bank is represented as an immutable tuple of (resource, amount).
+  bank: Tuple[Tuple[Gem, int], ...] = field(default_factory=tuple)
+  visible_cards: Tuple[Card, ...] = field(default_factory=tuple)
+  turn: int = 0
+  last_action: Optional[Action] = None
+
+  def __post_init__(self):
+    # normalize inputs into tuples where appropriate so the public
+    # API is always immutable. Allow callers to provide dicts or
+    # iterables; we try to be forgiving.
+    object.__setattr__(self, 'bank', _to_kv_tuple(self.bank))
+    object.__setattr__(self, 'players', tuple(self.players))
+    object.__setattr__(self, 'visible_cards', tuple(self.visible_cards))
