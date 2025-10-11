@@ -11,8 +11,10 @@ entrypoint.
 from typing import List, Optional, Dict, Sequence
 
 from .typings import GameState, PlayerState, Gem, Card, Role
+from .typings import Action
 from pathlib import Path
 import random
+
 
 class Engine:
   """A tiny, stateful wrapper around the engine helpers.
@@ -60,27 +62,26 @@ class Engine:
     if not (2 <= num_players <= 4):
       raise ValueError("num_players must be between 2 and 4")
 
-    names = names or [f"Player {i+1}" for i in range(num_players)]
+    names = names or [f"Player {i + 1}" for i in range(num_players)]
     if len(names) < num_players:
       # extend with default names if caller provided too few
-      names = names + [f"Player {i+1}" for i in range(len(names), num_players)]
+      names = names + [f"Player {i + 1}" for i in range(len(names), num_players)]
 
     players = [PlayerState(seat_id=i, name=names[i]) for i in range(num_players)]
 
     # Typical gem counts for a 2-4 player game (simple heuristic):
     bank = (
-      (Gem.RED, 7),
-      (Gem.BLUE, 7),
-      (Gem.WHITE, 7),
-      (Gem.BLACK, 7),
-      (Gem.GREEN, 7),
-      (Gem.GOLD, 5),
+        (Gem.RED, 7),
+        (Gem.BLUE, 7),
+        (Gem.WHITE, 7),
+        (Gem.BLACK, 7),
+        (Gem.GREEN, 7),
+        (Gem.GOLD, 5),
     )
 
     visible_cards = tuple()
 
     return GameState(players=tuple(players), bank=bank, visible_cards=visible_cards, turn=0)
-
 
   def reset(self, num_players: Optional[int] = None, names: Optional[List[str]] = None) -> None:
     """Reset the engine's internal GameState.
@@ -154,6 +155,133 @@ class Engine:
     if not deck:
       return []
     return list(deck[-n:]) if n > 0 else []
+
+  def get_legal_actions(self, seat_id: Optional[int] = None) -> List[Action]:
+    """Return a list of legal `Action` objects for the given player seat.
+
+    This is a lightweight implementation used by tests and agents to
+    enumerate plausible moves. It intentionally implements a permissive
+    set of actions:
+
+    - take_3_different: any triple of distinct gem types with at least 1 in
+      the bank.
+    - take_2_same: any gem type with at least 4 tokens in the bank (caller may
+      choose a stricter rule if desired).
+    - reserve_card: reserve any visible card (present on `visible_cards`).
+    - buy_card: a permissive buy action for visible cards (detailed payment
+      validation is left to the engine's apply/validation logic).
+
+    The method does not mutate engine state.
+    """
+    state = self._state
+    if seat_id is None:
+      seat_id = state.turn % len(state.players)
+
+    player = state.players[seat_id]
+
+    # Build a simple bank lookup
+    bank = {g: amt for g, amt in state.bank}
+
+    actions: List[Action] = []
+
+    # take_3_different: any combination of 3 distinct gems with at least 1
+    available_gems = [g for g, amt in bank.items() if amt > 0 and g != Gem.GOLD]
+    from itertools import combinations
+    if len(available_gems) > 3:
+      # simple approach: choose any 3-combination (order not important)
+      for combo in combinations(available_gems, 3):
+        actions.append(Action.take_3_different(list(combo)))
+    elif len(available_gems) != 0:
+      # if fewer than 3 types available, allow taking all available types
+      actions.append(Action.take_3_different(available_gems))
+
+    # take_2_same: allow gems with at least 4 tokens in bank
+    for g, amt in bank.items():
+      if g == Gem.GOLD:
+        continue
+      if amt >= 4:
+        actions.append(Action.take_2_same(g, 2))
+
+    # reserve_card and buy_card for visible cards (if card has id); filter buy_card by affordability
+    gold_in_bank = bank.get(Gem.GOLD, 0)
+    for card in state.visible_cards:
+      card_id = getattr(card, 'id', None)
+      if card_id is None:
+        continue
+      # take a gold only if available
+      take_gold = gold_in_bank > 0
+      actions.append(Action.reserve_card(card_id, take_gold=take_gold))
+      payments = can_afford(card, player)
+      for payment in payments:
+        actions.append(Action.buy_card(card_id, payment=payment))
+
+    return actions
+
+
+def can_afford(card: Card, player: PlayerState) -> List[Dict[Gem, int]]:
+  '''
+  Return all possible exact payment combinations for purchasing `card` with
+  the given `player`'s gem tokens, including gold (wild) substitutions.
+
+  A payment combination is represented as a dict mapping `Gem` -> int token
+  count spent of that gem (including `Gem.GOLD` if wilds are used). Each
+  combination pays the card's cost exactly (no overpay) and uses no more
+  than the player's available tokens.
+
+  Rules / assumptions:
+  - Colored gems must cover some portion (possibly all) of each required
+    color. Gold wilds may substitute for any remaining unmet requirement.
+  - We allow (and enumerate) the use of gold even if the player has enough
+    colored gems; while not always strategically optimal it is typically
+    a legal payment in wildcard-based games.
+  - No combination intentionally overpays or substitutes gold when colored
+    gems are unused beyond the card's requirement (i.e. you cannot pay extra).
+
+  Returns: List[Dict[Gem, int]] (may be empty if unaffordable).
+  '''
+  # build player's gem lookup
+  player_gems: Dict[Gem, int] = {g: amt for g, amt in player.gems}
+  gold_available = player_gems.get(Gem.GOLD, 0)
+
+  # cost requirements as list of (gem, required)
+  requirements = list(card.cost)
+  if not requirements:
+    # nothing to pay
+    return [{}]
+
+  # For each required color, determine max colored gems the player can spend
+  ranges = []  # list of ranges for each required gem indicating possible colored spends
+  gems_order: List[Gem] = []
+  req_amounts: List[int] = []
+  for g, req in requirements:
+    gems_order.append(g)
+    req_amounts.append(req)
+    have = player_gems.get(g, 0)
+    max_colored = min(have, req)
+    # allow spending 0..max_colored colored gems for this color
+    ranges.append(range(0, max_colored + 1))
+
+  from itertools import product
+
+  payments: List[Dict[Gem, int]] = []
+  # enumerate all combinations of colored spends
+  for combo in product(*ranges):
+    # combo is tuple of colored spends aligned with gems_order
+    deficit = 0
+    for spend, req in zip(combo, req_amounts):
+      if spend < req:
+        deficit += (req - spend)
+    if deficit <= gold_available:
+      # build payment mapping: include colored spends and gold used
+      pay: Dict[Gem, int] = {}
+      for g, spend in zip(gems_order, combo):
+        if spend > 0:
+          pay[g] = spend
+      if deficit > 0:
+        pay[Gem.GOLD] = deficit
+      payments.append(pay)
+
+  return payments
 
 
 def load_assets(path: Optional[str] = None):
