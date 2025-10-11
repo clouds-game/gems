@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field, InitVar
 from enum import Enum
-from typing import Any, Optional, Tuple, Iterable, Mapping, Union, TYPE_CHECKING
+from typing import Any, Optional, Tuple, Iterable, Mapping, Union, TYPE_CHECKING, Iterator
 
 if TYPE_CHECKING:
   from .actions import Action
@@ -16,6 +16,9 @@ def _to_kv_tuple(v: Iterable):
     # comparing Enum instances.
     return tuple(sorted(v.items(), key=lambda kv: str(kv[0])))
   return tuple(v)
+
+
+
 
 
 class Gem(Enum):
@@ -40,6 +43,42 @@ class Gem(Enum):
     if self == Gem.GOLD:
       return 'D'  # avoid confusion with GREEN
     return self.value[0].upper()
+
+
+
+@dataclass(frozen=True)
+class GemList:
+  """Immutable list-like wrapper for a sequence of (Gem, int) pairs.
+
+  Purpose: replace the frequent usage of Tuple[Tuple[Gem, int], ...].
+
+  Construction accepts a tuple, dict, or any iterable of (Gem, int).
+  Provides lightweight helpers to convert to/from dict and to iterate.
+  """
+  _pairs: Tuple[Tuple['Gem', int], ...] = field(default_factory=tuple)
+
+  def __init__(self, vals: Union[Iterable[Tuple['Gem', int]], Mapping['Gem', int]] = ()):  # pragma: no cover - simple wrapper
+    # normalize via the existing helper
+    pairs = _to_kv_tuple(vals)
+    object.__setattr__(self, '_pairs', pairs)
+
+  def __iter__(self) -> Iterator[Tuple['Gem', int]]:
+    return iter(self._pairs)
+
+  def __len__(self) -> int:
+    return len(self._pairs)
+
+  def __getitem__(self, i):
+    return self._pairs[i]
+
+  def to_dict(self) -> dict:
+    return {g: n for g, n in self._pairs}
+
+  def as_tuple(self) -> Tuple[Tuple['Gem', int], ...]:
+    return self._pairs
+
+  def __repr__(self) -> str:  # pragma: no cover - convenience
+    return f"GemList({self._pairs!r})"
 
 
 class ActionType(Enum):
@@ -74,13 +113,13 @@ class Card:
   # tuple-backed attributes for consumers.
   cost_in: InitVar[Union[Iterable[Tuple[Gem, int]], Mapping[Gem, int]]] = ()
   metadata_in: InitVar[Union[Iterable[Tuple[str, Any]], Mapping[str, Any]]] = ()
-  cost: Tuple[Tuple[Gem, int], ...] = field(init=False, default_factory=tuple)
+  cost: GemList = field(init=False, default_factory=GemList)
   face_up: bool = True
   metadata: Tuple[Tuple[str, Any], ...] = field(init=False, default_factory=tuple)
 
   def __post_init__(self, cost_in, metadata_in):
     # normalize cost and metadata into tuples so Card is always immutable
-    object.__setattr__(self, 'cost', _to_kv_tuple(cost_in))
+    object.__setattr__(self, 'cost', GemList(_to_kv_tuple(cost_in)))
     object.__setattr__(self, 'metadata', _to_kv_tuple(metadata_in))
 
   def to_dict(self) -> dict:
@@ -126,12 +165,12 @@ class Role:
   # public attributes `requirements` and `metadata` are always tuples.
   requirements_in: InitVar[Union[Iterable[Tuple[Gem, int]], Mapping[Gem, int]]] = ()
   metadata_in: InitVar[Union[Iterable[Tuple[str, Any]], Mapping[str, Any]]] = ()
-  requirements: Tuple[Tuple[Gem, int], ...] = field(init=False, default_factory=tuple)
+  requirements: GemList = field(init=False, default_factory=GemList)
   metadata: Tuple[Tuple[str, Any], ...] = field(init=False, default_factory=tuple)
 
   def __post_init__(self, requirements_in, metadata_in):
     # normalize and store the tuple-backed public attributes
-    object.__setattr__(self, 'requirements', _to_kv_tuple(requirements_in))
+    object.__setattr__(self, 'requirements', GemList(_to_kv_tuple(requirements_in)))
     object.__setattr__(self, 'metadata', _to_kv_tuple(metadata_in))
 
   def to_dict(self) -> dict:
@@ -159,7 +198,7 @@ class PlayerState:
   """
   seat_id: int
   name: Optional[str] = None
-  gems: Tuple[Tuple[Gem, int], ...] = field(default_factory=tuple)
+  gems: GemList = field(default_factory=GemList)
   score: int = 0
   # cards the player has reserved but not yet purchased
   reserved_cards: Tuple[Card, ...] = field(default_factory=tuple)
@@ -170,7 +209,7 @@ class PlayerState:
   # purchased card may have a `bonus` Gem that gives a permanent -1 cost
   # for that Gem. `discounts` stores the aggregated counts as an
   # immutable tuple of (Gem, amount) pairs.
-  discounts: Tuple[Tuple[Gem, int], ...] = field(init=False, default_factory=tuple)
+  discounts: GemList = field(init=False, default_factory=GemList)
 
   def __post_init__(self, purchased_cards_in):
     # normalize reserved_cards and purchased_cards into tuples so the
@@ -185,7 +224,7 @@ class PlayerState:
       if getattr(c, 'bonus', None) is not None:
         counts[c.bonus] = counts.get(c.bonus, 0) + 1
     # normalize into the same stable tuple-of-pairs format used elsewhere
-    object.__setattr__(self, 'discounts', _to_kv_tuple(counts))
+    object.__setattr__(self, 'discounts', GemList(_to_kv_tuple(counts)))
 
 
 
@@ -198,7 +237,7 @@ class GameState:
   """
   players: Tuple[PlayerState, ...]
   # bank is represented as an immutable tuple of (resource, amount).
-  bank: Tuple[Tuple[Gem, int], ...] = field(default_factory=tuple)
+  bank: GemList = field(default_factory=GemList)
   visible_cards: Tuple[Card, ...] = field(default_factory=tuple)
   turn: int = 0
   last_action: Optional["Action"] = None
@@ -207,6 +246,6 @@ class GameState:
     # normalize inputs into tuples where appropriate so the public
     # API is always immutable. Allow callers to provide dicts or
     # iterables; we try to be forgiving.
-    object.__setattr__(self, 'bank', _to_kv_tuple(self.bank))
+    object.__setattr__(self, 'bank', GemList(_to_kv_tuple(self.bank)))
     object.__setattr__(self, 'players', tuple(self.players))
     object.__setattr__(self, 'visible_cards', tuple(self.visible_cards))

@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 from typing import Optional, Mapping, Tuple, Dict, Iterable
 from abc import ABC, abstractmethod
 
-from .typings import Gem, ActionType, _to_kv_tuple, GameState, PlayerState, Card
+from .typings import Gem, ActionType, _to_kv_tuple, GameState, PlayerState, Card, GemList
 
 
 @dataclass(frozen=True)
@@ -143,11 +143,11 @@ class Take2Action(Action):
 @dataclass(frozen=True)
 class BuyCardAction(Action):
   card_id: str = ''
-  payment: Tuple[Tuple[Gem, int], ...] = field(default_factory=tuple)
+  payment: GemList = field(default_factory=GemList)
 
   @classmethod
   def create(cls, card_id: str, payment: Optional[Mapping[Gem, int]] = None) -> 'BuyCardAction':
-    pay = _to_kv_tuple(dict(payment) if payment is not None else {})
+    pay = GemList(_to_kv_tuple(dict(payment) if payment is not None else {}))
     return cls(type=ActionType.BUY_CARD, card_id=card_id, payment=pay)
 
   def __str__(self) -> str:
@@ -278,11 +278,14 @@ class ReserveCardAction(Action):
 
 
 def _kv_tuple_to_dict(t: Iterable[Tuple[Gem, int]]) -> Dict[Gem, int]:
+  # accept GemList or iterable of pairs
+  if isinstance(t, GemList):
+    t = t.as_tuple()
   return {g: n for g, n in t}
 
 
-def _dict_to_kv_tuple(d: Mapping[Gem, int]) -> Tuple[Tuple[Gem, int], ...]:
-  return _to_kv_tuple(dict(d))
+def _dict_to_kv_tuple(d: Mapping[Gem, int]) -> GemList:
+  return GemList(_to_kv_tuple(dict(d)))
 
 
 def apply_action(state: GameState, action: Action) -> GameState:
