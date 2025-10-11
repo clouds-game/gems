@@ -11,7 +11,7 @@ entrypoint.
 from typing import List, Optional, Dict, Sequence
 
 from .typings import GameState, PlayerState, Gem, Card, Role
-from .typings import (
+from .action import (
   Action,
   Take3Action,
   Take2Action,

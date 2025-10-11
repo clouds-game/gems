@@ -12,3 +12,8 @@ if __name__ == "__main__":
   engine = Engine(num_players=3, names=["Alice", "Bob", "Cara"])
   print("Initialized game state:\n")
   engine.print_summary()
+
+  actions = engine.get_legal_actions()
+  print(f"Legal {len(actions)} actions for player {engine.get_state().turn}:")
+  for action in actions:
+    print(f"  {action}")

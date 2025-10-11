@@ -42,6 +42,10 @@ class Take3Action(Action):
   def create(cls, *gems: Gem) -> 'Take3Action':
     return cls(type=ActionType.TAKE_3_DIFFERENT, gems=tuple(gems))
 
+  def __str__(self) -> str:
+    gem_str = ''.join(g.short_str() for g in self.gems)
+    return f"Action.Take3(gems=[{gem_str}])"
+
 
 @dataclass(frozen=True)
 class Take2Action(Action):
@@ -51,6 +55,11 @@ class Take2Action(Action):
   @classmethod
   def create(cls, gem: Gem, count: int = 2) -> 'Take2Action':
     return cls(type=ActionType.TAKE_2_SAME, gem=gem, count=count)
+
+  def __str__(self) -> str:
+    if self.count != 2:
+      return f"Action.Take2({self.gem.short_str()}{self.count})"
+    return f"Action.Take2({self.gem.short_str()})"
 
 
 @dataclass(frozen=True)
@@ -63,6 +72,10 @@ class BuyCardAction(Action):
     pay = _to_kv_tuple(dict(payment) if payment is not None else {})
     return cls(type=ActionType.BUY_CARD, card_id=card_id, payment=pay)
 
+  def __str__(self) -> str:
+    pay_str = ''.join(f"{g.short_str()}{n}" for g, n in self.payment)
+    return f"Action.Buy({self.card_id}, {pay_str})"
+
 
 @dataclass(frozen=True)
 class ReserveCardAction(Action):
@@ -72,3 +85,8 @@ class ReserveCardAction(Action):
   @classmethod
   def create(cls, card_id: str, take_gold: bool = True) -> 'ReserveCardAction':
     return cls(type=ActionType.RESERVE_CARD, card_id=card_id, take_gold=bool(take_gold))
+
+  def __str__(self) -> str:
+    if self.take_gold:
+      return f"Action.Reserve({self.card_id}, D)"
+    return f"Action.Reserve({self.card_id})"
