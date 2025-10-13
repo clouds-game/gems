@@ -46,7 +46,8 @@ class PlayerState:
 
   def __post_init__(self, gems_in, reserved_cards_in, purchased_cards_in):
     if gems_in is not None:
-      object.__setattr__(self, 'gems', GemList(_to_kv_tuple(gems_in) if not isinstance(gems_in, GemList) else gems_in))
+      object.__setattr__(self, 'gems', GemList(_to_kv_tuple(
+          gems_in) if not isinstance(gems_in, GemList) else gems_in))
     object.__setattr__(self, 'reserved_cards', CardList(tuple(reserved_cards_in)))
     purchased = tuple(purchased_cards_in)
     object.__setattr__(self, 'purchased_cards', CardList(purchased))
@@ -115,11 +116,11 @@ class PlayerState:
 
   def get_legal_actions(self, state: "GameState") -> List["Action"]:
     from .actions import (
-      Action,
-      Take3Action,
-      Take2Action,
-      BuyCardAction,
-      ReserveCardAction,
+        Action,
+        Take3Action,
+        Take2Action,
+        BuyCardAction,
+        ReserveCardAction,
     )
     """Enumerate a permissive set of legal actions for this player.
 
@@ -147,17 +148,23 @@ class PlayerState:
         actions.append(Take2Action.create(g, 2))
 
     gold_in_bank = bank.get(Gem.GOLD, 0)
-    visible_cards = state.visible_cards + self.reserved_cards
-    for card in visible_cards:
+    # visible_cards = state.visible_cards + self.reserved_cards
+
+    for card in state.visible_cards + self.reserved_cards:
+      # TODO card_id shoule not be none
       card_id = getattr(card, 'id', None)
       if card_id is None:
         continue
-      take_gold = gold_in_bank > 0
-      if self.can_reserve():
-        actions.append(ReserveCardAction.create(card_id, take_gold=take_gold))
       payments = player.can_afford(card)
       for payment in payments:
         actions.append(BuyCardAction.create(card_id, payment=payment))
+
+    for card in state.visible_cards:
+      if card.id is None:
+        continue
+      take_gold = gold_in_bank > 0
+      if self.can_reserve():
+        actions.append(ReserveCardAction.create(card.id, take_gold=take_gold))
 
     if not actions:
       return [Action.noop()]

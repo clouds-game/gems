@@ -131,7 +131,7 @@ class Card:
     bonus = self.bonus.short_str() if self.bonus else "N"
     points = f"{self.points}" if self.points > 0 else ""
     costs = "".join(f"{g.short_str()}{n}" for g, n in self.cost)
-    return f"Card([{self.level}]{bonus}{points}:{costs})"
+    return f"Card([{self.id}][{self.level}]{bonus}{points}:{costs})"
 
 
 @dataclass(frozen=True)

@@ -241,11 +241,9 @@ class BuyCardAction(Action):
   def _check(self, player: PlayerState, state: GameState) -> bool:
     # allow buying a card either from the visible cards or from the player's
     # own reserved cards
-    card = state.visible_cards.get(self.card_id)
+    card = state.visible_cards.get(self.card_id) or player.reserved_cards.get(self.card_id)
     if card is None:
-      card = player.reserved_cards.get(self.card_id)
-      if card is None:
-        return False
+      return False
     return player.check_afford(card, dict(self.payment))
 
 
