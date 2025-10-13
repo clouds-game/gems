@@ -7,16 +7,7 @@ if TYPE_CHECKING:
   from .state import PlayerState
 
 
-def _to_kv_tuple(v: Iterable):
-  """Normalize a dict or iterable of pairs into a stable tuple of pairs."""
-  if isinstance(v, tuple):
-    return v
-  if isinstance(v, dict):
-    # sort dict items by stringified key so callers may pass either
-    # string keys or Gem enum keys without causing a TypeError from
-    # comparing Enum instances.
-    return tuple(sorted(v.items(), key=lambda kv: str(kv[0])))
-  return tuple(v)
+from .utils import _to_kv_tuple
 
 
 

@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 
 from .typings import Gem, ActionType, GameState, GemList
 from .state import PlayerState
+from .utils import _replace_tuple
 
 
 @dataclass(frozen=True)
@@ -72,7 +73,6 @@ class Take3Action(Action):
     bank = dict(state.bank)
     player_gems = dict(player.gems)
     visible_cards = list(state.visible_cards)
-    players = list(state.players)
 
     # remove one of each requested gem from bank and add to player's gems
     for g in getattr(self, 'gems', ()):  # type: ignore[attr-defined]
@@ -85,11 +85,11 @@ class Take3Action(Action):
                              gems_in=player_gems, score=player.score,
                              reserved_cards_in=player.reserved_cards,
                              purchased_cards_in=player.purchased_cards)
-    players[seat] = new_player
+    players = _replace_tuple(state.players, seat, new_player)
 
     new_bank = GemList(bank)
     new_visible = tuple(visible_cards)
-    return GameState(players=tuple(players), bank=new_bank,
+    return GameState(players=players, bank=new_bank,
                      visible_cards=new_visible, turn=state.turn,
                      last_action=self)
 
@@ -120,7 +120,6 @@ class Take2Action(Action):
     bank = dict(state.bank)
     player_gems = dict(player.gems)
     visible_cards = list(state.visible_cards)
-    players = list(state.players)
 
     gem = getattr(self, 'gem')
     count = getattr(self, 'count', 2)
@@ -135,11 +134,11 @@ class Take2Action(Action):
                              gems_in=player_gems, score=player.score,
                              reserved_cards_in=player.reserved_cards,
                              purchased_cards_in=player.purchased_cards)
-    players[seat] = new_player
+    players = _replace_tuple(state.players, seat, new_player)
 
     new_bank = GemList(bank)
     new_visible = tuple(visible_cards)
-    return GameState(players=tuple(players), bank=new_bank,
+    return GameState(players=players, bank=new_bank,
                      visible_cards=new_visible, turn=state.turn,
                      last_action=self)
 
@@ -170,14 +169,13 @@ class BuyCardAction(Action):
     bank = dict(state.bank)
     player_gems = dict(player.gems)
     visible_cards = list(state.visible_cards)
-    players = list(state.players)
 
     card_id = getattr(self, 'card_id')
     payment = dict(getattr(self, 'payment', ()))
     # locate card either in visible_cards or in player's reserved_cards
     found = None
     from_reserved = False
-    reserved_list = []
+    reserved_list: list = []
     for i, c in enumerate(visible_cards):
       if getattr(c, 'id', None) == card_id:
         found = visible_cards.pop(i)
@@ -215,11 +213,11 @@ class BuyCardAction(Action):
                              gems_in=player_gems, score=new_score,
                              reserved_cards_in=new_reserved,
                              purchased_cards_in=new_purchased)
-    players[seat] = new_player
+    players = _replace_tuple(state.players, seat, new_player)
 
     new_bank = GemList(bank)
     new_visible = tuple(visible_cards)
-    return GameState(players=tuple(players), bank=new_bank,
+    return GameState(players=players, bank=new_bank,
                      visible_cards=new_visible, turn=state.turn,
                      last_action=self)
 
@@ -250,7 +248,6 @@ class ReserveCardAction(Action):
     bank = dict(state.bank)
     player_gems = dict(player.gems)
     visible_cards = list(state.visible_cards)
-    players = list(state.players)
 
     card_id = getattr(self, 'card_id')
     take_gold = getattr(self, 'take_gold', True)
@@ -274,11 +271,11 @@ class ReserveCardAction(Action):
                              gems_in=player_gems, score=player.score,
                              reserved_cards_in=new_reserved,
                              purchased_cards_in=player.purchased_cards)
-    players[seat] = new_player
+    players = _replace_tuple(state.players, seat, new_player)
 
     new_bank = GemList(bank)
     new_visible = tuple(visible_cards)
-    return GameState(players=tuple(players), bank=new_bank,
+    return GameState(players=players, bank=new_bank,
                      visible_cards=new_visible, turn=state.turn,
                      last_action=self)
 

@@ -1,7 +1,8 @@
 from dataclasses import InitVar, dataclass, field
 from typing import Iterable, Mapping, Optional, List, Dict, TYPE_CHECKING
 
-from .typings import Gem, GemList, Card, GameState, _to_kv_tuple
+from .typings import Gem, GemList, Card, GameState
+from .utils import _to_kv_tuple
 
 if TYPE_CHECKING:
   from .actions import Action
