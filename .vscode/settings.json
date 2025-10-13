@@ -1,7 +1,9 @@
 {
   "python.analysis.typeCheckingMode": "standard",
   "python.testing.pytestArgs": [
-    "tests"
+    "-v",
+    "--cov=.",
+    "tests/"
   ],
   "python.testing.unittestEnabled": false,
   "python.testing.pytestEnabled": true,
