@@ -24,37 +24,12 @@ if __name__ == "__main__":
   # Play until any player reaches 15 points (win condition) or no legal
   # actions are available for the current player.
 
-  all_noops = False
-  while True:
-    if all_noops:
-      print("All players have only noop actions. Ending game.")
-      break
-    state = engine.get_state()
-    # check for winner
-    scores = [p.score for p in state.players]
-    if any(s >= 15 for s in scores):
-      winners = [p for p in state.players if p.score >= 15]
-      print("Game finished — winner(s):")
-      for w in winners:
-        print(
-            f"  seat={w.seat_id} name={w.name!r} score={w.score} cards={len(w.purchased_cards)} reserved={len(w.reserved_cards)}")
-      break
-
-    all_noops = True
-    for seat in range(len(state.players)):
-      state = engine.get_state()
-      actions = engine.get_legal_actions(seat)
-      if not actions or all(a.type == ActionType.NOOP for a in actions):
-        print(f"No legal actions available for player {seat}.")
-        continue
-      else:
-        all_noops = False
-
-      agent = agents[seat]
-      action = agent.act(state, actions)
-      print(f"Turn {state.turn} — player {seat} performs: {action}")
-      # apply action and update engine state
-      engine._state = action.apply(state)
-      # print a brief summary after the move
-      engine.print_summary()
-      engine.advance_turn()
+  while not engine.game_end():
+    engine.play_one_round(agents=agents)
+  winners = engine.game_winners()
+  if winners:
+    print("Game finished — winner(s):")
+    for w in winners:
+      print(f"  seat={w.seat_id} name={w.name!r} score={w.score} cards={len(w.purchased_cards)} reserved={len(w.reserved_cards)}")
+  else:
+    print("All players have only noop actions. Ending game.")

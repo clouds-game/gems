@@ -8,15 +8,17 @@ development in the repository root so callers have a stable, package-level
 entrypoint.
 """
 
-from typing import List, Optional, Dict, Sequence
+from typing import List, Optional, Dict, Sequence, TypeVar
 
-from .typings import Gem, Card, Role
+from gems.agents.core import Agent
+
+from .typings import ActionType, Gem, Card, Role
 from .state import PlayerState, GameState
 from .actions import Action
 from pathlib import Path
 import random
 
-
+BaseAgent = TypeVar('BaseAgent', bound=Agent)
 class Engine:
   """A tiny, stateful wrapper around the engine helpers.
 
@@ -29,14 +31,14 @@ class Engine:
   - `print_summary()` to display a human readable summary
   """
 
-  def __init__(self, num_players: int = 2, names: Optional[List[str]] = None):
+  def __init__(self, num_players: int = 2, names: Optional[List[str]] = None, seed: Optional[int] = None):
     self._num_players = num_players
     self._names = names
     self._state = self.create_game(num_players, names)
     # load and shuffle assets, then draw initial visible cards and roles
     # default seed omitted for non-deterministic startup; callers can
     # re-seed by calling `load_and_shuffle_assets` explicitly.
-    self.load_and_shuffle_assets()
+    self.load_and_shuffle_assets(seed=seed)
     # draw 4 cards for each level (1..3)
     visible = []
     for lvl in (1, 2, 3):
@@ -52,6 +54,7 @@ class Engine:
     # update GameState.visible_cards to include the visible cards
     self._state = GameState(players=self._state.players, bank=self._state.bank,
                             visible_cards_in=visible, turn=self._state.turn)
+    self._all_noops_last_round = False
 
   @staticmethod
   def create_game(num_players: int = 2, names: Optional[List[str]] = None) -> GameState:
@@ -60,8 +63,8 @@ class Engine:
     - num_players: between 2 and 4 (inclusive).
     - names: optional list of player display names; defaults to "Player 1"...
     """
-    if not (2 <= num_players <= 4):
-      raise ValueError("num_players must be between 2 and 4")
+    # if not (2 <= num_players <= 4):
+    #   raise ValueError("num_players must be between 2 and 4")
 
     names = names or [f"Player {i + 1}" for i in range(num_players)]
     if len(names) < num_players:
@@ -182,6 +185,44 @@ class Engine:
     `turn` counter. It does not mutate any other part of the state.
     """
     self._state = self._state.advance_turn(self.decks_by_level)
+
+  def play_one_round(self, agents: List[BaseAgent], debug=True) -> None:
+    """Play a full round (one turn per player) using specific Agents.
+
+    This is a convenience for quick simulations and testing. It does not
+    check for game end conditions.
+    """
+    all_noops = True
+    num_players = len(self._state.players)
+    for seat in range(num_players):
+      state = self.get_state()
+      agent = agents[seat]
+      actions = self.get_legal_actions(seat)
+      if not all(a.type == ActionType.NOOP for a in actions):
+        all_noops = False
+      action = agent.act(state, actions)
+      if debug:
+        print(f"Turn {state.turn} — player {seat} performs: {action}")
+      # apply action and update engine state
+      self._state = action.apply(state)
+      # print a brief summary after the move
+      if debug:
+        self.print_summary()
+      self.advance_turn()
+    if all_noops:
+      self._all_noops_last_round = True
+
+  def game_end(self) -> bool:
+    """Return True if any player has reached the winning score (15 points)."""
+    if self._all_noops_last_round:
+      return True
+    winners = self.game_winners()
+    return len(winners) > 0
+
+  def game_winners(self) -> List[PlayerState]:
+    """Return a list of players who have reached the winning score (15 points)."""
+    return [p for p in self._state.players if p.score >= 15]
+
 
 def load_assets(path: Optional[str] = None):
   """Load cards and roles from a JSON config file and return (cards, roles).
