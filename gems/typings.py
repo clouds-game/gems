@@ -162,6 +162,10 @@ class CardList:
   def __repr__(self) -> str:  # pragma: no cover - convenience
     return f"CardList({self._items!r})"
 
+  def get_level(self, level: int) -> 'CardList':
+    """Return a new CardList containing only cards with the given level."""
+    return CardList([c for c in self._items if c.level == level])
+
 
 @dataclass(frozen=True)
 class Role:
