@@ -14,7 +14,7 @@ actions. The minimal contract is:
 - __init__(seat_id: int, rng: Optional[random.Random] = None)
 - act(state: GameState, legal_actions: Sequence[Action], *, timeout: Optional[float]=None) -> Action
 - reset(seed: Optional[int] = None) -> None  (optional but recommended)
-- observe(state: GameState) -> None  (optional; for informational updates)
+- observe(player: PlayerState, state: GameState) -> None  (optional; for informational updates)
 
 Rules the engine expects:
 
@@ -54,7 +54,7 @@ class Agent:
         if seed is not None:
             self.rng.seed(seed)
 
-    def observe(self, state) -> None:
+    def observe(self, player, state) -> None:
         # optional hook: receive state updates for internal bookkeeping
         pass
 

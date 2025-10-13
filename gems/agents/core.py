@@ -6,6 +6,9 @@ All Python code in this repo uses 2-space indentation.
 import random
 from typing import Optional, Sequence, Any
 
+from ..state import PlayerState, GameState
+from ..actions import Action
+
 
 class Agent:
   def __init__(self, seat_id: int, rng: Optional[random.Random] = None):
@@ -17,14 +20,19 @@ class Agent:
     if seed is not None:
       self.rng.seed(seed)
 
-  def observe(self, state: Any) -> None:
-    # optional hook for receiving state updates
+  def observe(self, player: PlayerState, state: GameState) -> None:
+    """Optional hook: receive an update about `player` and the full `state`.
+
+    Default implementation is a no-op. Subclasses may override this to
+    maintain lightweight per-player bookkeeping.
+    """
     pass
 
-  def act(self, state: Any, legal_actions: Sequence[Any], *, timeout: Optional[float] = None) -> Any:
-    """Return one element from legal_actions.
+  def act(self, state: GameState, legal_actions: Sequence[Action], *, timeout: Optional[float] = None) -> Action:
+    """Return one element from `legal_actions`.
 
-    Must be overridden by subclasses.
+    Subclasses must return one of the provided `legal_actions` (by identity
+    or value). Use `timeout` for interruption-aware planners.
     """
     raise NotImplementedError()
 

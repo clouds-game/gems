@@ -6,9 +6,11 @@ GreedyAgent uses quick_score to evaluate legal actions and picks the best.
 from typing import Sequence, Any, Optional
 
 from .core import Agent
+from ..actions import Action
+from ..state import GameState
 
 
-def quick_score(state: Any, seat_id: int, action: Any) -> float:
+def quick_score(state: GameState, seat_id: int, action: Action) -> float:
   """Quick, cheap heuristic for GreedyAgent.
 
   This is intentionally minimal: it returns 0.0 for unknown actions. A
@@ -19,7 +21,7 @@ def quick_score(state: Any, seat_id: int, action: Any) -> float:
 
 
 class GreedyAgent(Agent):
-  def act(self, state: Any, legal_actions: Sequence[Any], *, timeout: Optional[float] = None) -> Any:
+  def act(self, state: GameState, legal_actions: Sequence[Action], *, timeout: Optional[float] = None) -> Action:
     if not legal_actions:
       raise ValueError("No legal actions available")
     best = None
@@ -29,6 +31,9 @@ class GreedyAgent(Agent):
       if s > best_score:
         best_score = s
         best = a
+    # At this point `best` is guaranteed to be set because `legal_actions`
+    # is non-empty, but help the type-checker by asserting not None.
+    assert best is not None
     return best
 
 
