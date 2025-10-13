@@ -175,6 +175,13 @@ class Engine:
     seat_id = seat_id if seat_id is not None else self._state.turn % len(self._state.players)
     return self._state.players[seat_id].get_legal_actions(self._state)
 
+  def advance_turn(self) -> None:
+    """Advance the turn to the next player.
+
+    This is a convenience method that updates the internal GameState's
+    `turn` counter. It does not mutate any other part of the state.
+    """
+    self._state = self._state.advance_turn(self.decks_by_level)
 
 def load_assets(path: Optional[str] = None):
   """Load cards and roles from a JSON config file and return (cards, roles).

@@ -39,5 +39,6 @@ if __name__ == "__main__":
     print(f"Turn {state.turn} — player {seat} performs: {action}")
     # apply action and update engine state
     engine._state = action.apply(state)
+    engine.advance_turn()
     # print a brief summary after the move
     engine.print_summary()

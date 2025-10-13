@@ -87,10 +87,8 @@ class Take3Action(Action):
                              purchased_cards_in=player.purchased_cards)
     players = _replace_tuple(state.players, seat, new_player)
 
-    new_bank = GemList(bank)
-    new_visible = tuple(visible_cards)
-    return GameState(players=players, bank=new_bank,
-                     visible_cards=new_visible, turn=state.turn,
+    return GameState(players=players, bank_in=bank,
+                     visible_cards_in=visible_cards, turn=state.turn,
                      last_action=self)
 
 
@@ -136,10 +134,8 @@ class Take2Action(Action):
                              purchased_cards_in=player.purchased_cards)
     players = _replace_tuple(state.players, seat, new_player)
 
-    new_bank = GemList(bank)
-    new_visible = tuple(visible_cards)
-    return GameState(players=players, bank=new_bank,
-                     visible_cards=new_visible, turn=state.turn,
+    return GameState(players=players, bank_in=bank,
+                     visible_cards_in=visible_cards, turn=state.turn,
                      last_action=self)
 
 
@@ -215,10 +211,8 @@ class BuyCardAction(Action):
                              purchased_cards_in=new_purchased)
     players = _replace_tuple(state.players, seat, new_player)
 
-    new_bank = GemList(bank)
-    new_visible = tuple(visible_cards)
-    return GameState(players=players, bank=new_bank,
-                     visible_cards=new_visible, turn=state.turn,
+    return GameState(players=players, bank_in=bank,
+                     visible_cards_in=visible_cards, turn=state.turn,
                      last_action=self)
 
 
@@ -273,10 +267,8 @@ class ReserveCardAction(Action):
                              purchased_cards_in=player.purchased_cards)
     players = _replace_tuple(state.players, seat, new_player)
 
-    new_bank = GemList(bank)
-    new_visible = tuple(visible_cards)
-    return GameState(players=players, bank=new_bank,
-                     visible_cards=new_visible, turn=state.turn,
+    return GameState(players=players, bank_in=bank,
+                     visible_cards_in=visible_cards, turn=state.turn,
                      last_action=self)
 
 
