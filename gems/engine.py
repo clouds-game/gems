@@ -108,7 +108,7 @@ class Engine:
     This is a convenience for development and quick debugging; callers should
     avoid parsing the printed output in tests.
     """
-    print(f"Turn: {self._state.turn}")
+    print(f"Round: {self._state.round} Turn: {self._state.turn}")
     print("Players:")
     for p in self._state.players:
       print(f"  seat={p.seat_id} name={p.name!r} score={p.score} gems={p.gems} cards={len(p.purchased_cards)} reserved={len(p.reserved_cards)}")

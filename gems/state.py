@@ -182,6 +182,7 @@ class GameState:
   visible_cards_in: InitVar[Iterable[Card] | CardList | None] = None
   visible_cards: CardList = field(default_factory=CardList)
   turn: int = 0
+  round: int = 0
   last_action: Optional["Action"] = None
 
   def __post_init__(self, bank_in, visible_cards_in):
@@ -194,6 +195,11 @@ class GameState:
       object.__setattr__(self, 'visible_cards', CardList(visible_cards_in))
     object.__setattr__(self, 'players', tuple(self.players))
     object.__setattr__(self, 'visible_cards', CardList(self.visible_cards))
+
+    num_players = len(self.players)
+    if num_players <= 0:
+      raise ValueError("GameState must have at least one player")
+    object.__setattr__(self, 'round', self.turn // num_players)
 
   def advance_turn(self, decks_by_level: Optional[Dict[int, List[Card]]] = None, per_level: int = 4) -> 'GameState':
     """Return a new GameState with the turn advanced by one.
