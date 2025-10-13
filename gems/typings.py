@@ -4,6 +4,7 @@ from typing import Any, Optional, Tuple, Iterable, Mapping, Union, TYPE_CHECKING
 
 if TYPE_CHECKING:
   from .actions import Action
+  from .state import PlayerState
 
 
 def _to_kv_tuple(v: Iterable):
@@ -194,45 +195,9 @@ class Role:
                requirements_in=reqs, metadata_in=metadata)
 
 
-@dataclass(frozen=True)
-class PlayerState:
-  """Public-per-player snapshot inside GameState.
-
-  Minimal fields used by agents/engine. Implementations may extend this.
-  """
-  seat_id: int
-  name: Optional[str] = None
-  gems_in: InitVar[Iterable[tuple[Gem, int]] | Mapping[Gem, int] | GemList | None] = None
-  gems: GemList = field(default_factory=GemList)
-  score: int = 0
-  # cards the player has reserved but not yet purchased
-  reserved_cards_in: InitVar[Iterable[Card]] = ()
-  reserved_cards: tuple[Card, ...] = field(init=False, default_factory=tuple)
-  # cards the player has purchased (permanent bonuses / points)
-  purchased_cards_in: InitVar[Iterable[Card]] = ()
-  purchased_cards: tuple[Card, ...] = field(init=False, default_factory=tuple)
-  # per-gem permanent discounts are derived from purchased_cards: each
-  # purchased card may have a `bonus` Gem that gives a permanent -1 cost
-  # for that Gem. `discounts` stores the aggregated counts as an
-  # immutable tuple of (Gem, amount) pairs.
-  discounts: GemList = field(init=False, default_factory=GemList)
-
-  def __post_init__(self, gems_in, reserved_cards_in, purchased_cards_in):
-    # normalize reserved_cards and purchased_cards into tuples so the
-    # public attributes remain immutable even when callers pass lists.
-    if gems_in is not None:
-      object.__setattr__(self, 'gems', GemList(_to_kv_tuple(gems_in)))
-    object.__setattr__(self, 'reserved_cards', tuple(reserved_cards_in))
-    purchased = tuple(purchased_cards_in)
-    object.__setattr__(self, 'purchased_cards', purchased)
-
-    # Build discounts by counting bonuses on purchased cards.
-    counts: dict = {}
-    for c in purchased:
-      if getattr(c, 'bonus', None) is not None:
-        counts[c.bonus] = counts.get(c.bonus, 0) + 1
-    # normalize into the same stable tuple-of-pairs format used elsewhere
-    object.__setattr__(self, 'discounts', GemList(_to_kv_tuple(counts)))
+# PlayerState moved to `gems.state` to keep runtime logic separate from
+# pure type dataclasses. Import `PlayerState` from `gems.state` where
+# needed.
 
 
 
@@ -243,7 +208,7 @@ class GameState:
   Fields are converted to immutable tuples so agents can safely treat the
   object as read-only.
   """
-  players: Tuple[PlayerState, ...]
+  players: Tuple["PlayerState", ...]
   # bank is represented as an immutable tuple of (resource, amount).
   bank_in: InitVar[Iterable[Tuple[Gem, int]] | Mapping[Gem, int] | GemList | None] = None
   bank: GemList = field(default_factory=GemList)

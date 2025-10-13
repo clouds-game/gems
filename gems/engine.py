@@ -10,7 +10,8 @@ entrypoint.
 
 from typing import List, Optional, Dict, Sequence
 
-from .typings import GameState, PlayerState, Gem, Card, Role
+from .typings import GameState, Gem, Card, Role
+from .state import PlayerState
 from .actions import (
   Action,
   Take3Action,
@@ -116,7 +117,7 @@ class Engine:
     print(f"Turn: {self._state.turn}")
     print("Players:")
     for p in self._state.players:
-      print(f"  seat={p.seat_id} name={p.name!r} score={p.score} gems={p.gems}")
+      print(f"  seat={p.seat_id} name={p.name!r} score={p.score} gems={p.gems} cards={len(p.purchased_cards)} reserved={len(p.reserved_cards)}")
     print(f"Bank: {self._state.bank}")
     print(f"Visible cards: {", ".join(str(c) for c in self._state.visible_cards)}")
 
@@ -216,7 +217,7 @@ class Engine:
       take_gold = gold_in_bank > 0
       if len(player.reserved_cards) < 3:
         actions.append(ReserveCardAction.create(card_id, take_gold=take_gold))
-      payments = can_afford(card, player)
+      payments = player.can_afford(card)
       for payment in payments:
         actions.append(BuyCardAction.create(card_id, payment=payment))
 
@@ -230,69 +231,11 @@ class Engine:
 
 
 def can_afford(card: Card, player: PlayerState) -> List[Dict[Gem, int]]:
-  '''
-  Return all possible exact payment combinations for purchasing `card` with
-  the given `player`'s gem tokens, including gold (wild) substitutions.
+  """Compatibility shim: delegate to PlayerState.can_afford."""
+  return player.can_afford(card)
 
-  A payment combination is represented as a dict mapping `Gem` -> int token
-  count spent of that gem (including `Gem.GOLD` if wilds are used). Each
-  combination pays the card's cost exactly (no overpay) and uses no more
-  than the player's available tokens.
 
-  Rules / assumptions:
-  - Colored gems must cover some portion (possibly all) of each required
-    color. Gold wilds may substitute for any remaining unmet requirement.
-  - We allow (and enumerate) the use of gold even if the player has enough
-    colored gems; while not always strategically optimal it is typically
-    a legal payment in wildcard-based games.
-  - No combination intentionally overpays or substitutes gold when colored
-    gems are unused beyond the card's requirement (i.e. you cannot pay extra).
 
-  Returns: List[Dict[Gem, int]] (may be empty if unaffordable).
-  '''
-  # build player's gem lookup
-  player_gems: Dict[Gem, int] = {g: amt for g, amt in player.gems}
-  gold_available = player_gems.get(Gem.GOLD, 0)
-
-  # cost requirements as list of (gem, required)
-  requirements = list(card.cost)
-  if not requirements:
-    # nothing to pay
-    return [{}]
-
-  # For each required color, determine max colored gems the player can spend
-  ranges = []  # list of ranges for each required gem indicating possible colored spends
-  gems_order: List[Gem] = []
-  req_amounts: List[int] = []
-  for g, req in requirements:
-    gems_order.append(g)
-    req_amounts.append(req)
-    have = player_gems.get(g, 0)
-    max_colored = min(have, req)
-    # allow spending 0..max_colored colored gems for this color
-    ranges.append(range(0, max_colored + 1))
-
-  from itertools import product
-
-  payments: List[Dict[Gem, int]] = []
-  # enumerate all combinations of colored spends
-  for combo in product(*ranges):
-    # combo is tuple of colored spends aligned with gems_order
-    deficit = 0
-    for spend, req in zip(combo, req_amounts):
-      if spend < req:
-        deficit += (req - spend)
-    if deficit <= gold_available:
-      # build payment mapping: include colored spends and gold used
-      pay: Dict[Gem, int] = {}
-      for g, spend in zip(gems_order, combo):
-        if spend > 0:
-          pay[g] = spend
-      if deficit > 0:
-        pay[Gem.GOLD] = deficit
-      payments.append(pay)
-
-  return payments
 
 
 def load_assets(path: Optional[str] = None):

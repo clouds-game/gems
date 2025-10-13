@@ -26,7 +26,7 @@ if __name__ == "__main__":
       winners = [p for p in state.players if p.score >= 15]
       print("Game finished — winner(s):")
       for w in winners:
-        print(f"  seat={w.seat_id} name={w.name!r} score={w.score}")
+        print(f"  seat={w.seat_id} name={w.name!r} score={w.score} cards={len(w.purchased_cards)} reserved={len(w.reserved_cards)}")
       break
 
     seat = state.turn % len(state.players)

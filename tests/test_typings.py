@@ -24,7 +24,7 @@ def test_role_roundtrip():
 
 def test_playerstate_discounts_empty_and_aggregate():
   # empty purchased cards -> no discounts
-  from gems.typings import PlayerState
+  from gems.state import PlayerState
   p0 = PlayerState(seat_id=0, purchased_cards_in=[])
   assert tuple(p0.purchased_cards) == ()
   assert tuple(p0.discounts) == ()

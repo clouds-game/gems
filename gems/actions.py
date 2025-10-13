@@ -2,7 +2,8 @@ from dataclasses import dataclass, field
 from typing import Optional, Mapping, Tuple
 from abc import ABC, abstractmethod
 
-from .typings import Gem, ActionType, GameState, PlayerState, GemList
+from .typings import Gem, ActionType, GameState, GemList
+from .state import PlayerState
 
 
 @dataclass(frozen=True)
