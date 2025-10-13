@@ -267,6 +267,8 @@ class ReserveCardAction(Action):
       player_gems[Gem.GOLD] = player_gems.get(Gem.GOLD, 0) + 1
     # create new player with reserved card added
     new_reserved = tuple(player.reserved_cards) + (found,)
+    if len(new_reserved) > 3:
+      raise ValueError("Cannot reserve more than 3 cards")
     new_player = PlayerState(seat_id=player.seat_id, name=player.name,
                              gems_in=player_gems, score=player.score,
                              reserved_cards_in=new_reserved,

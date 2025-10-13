@@ -117,9 +117,7 @@ class Engine:
     print("Players:")
     for p in self._state.players:
       print(f"  seat={p.seat_id} name={p.name!r} score={p.score} gems={p.gems}")
-    print("Bank:")
-    for g, amt in self._state.bank:
-      print(f"  {g}: {amt}")
+    print(f"Bank: {self._state.bank}")
     print(f"Visible cards: {", ".join(str(c) for c in self._state.visible_cards)}")
 
   def load_and_shuffle_assets(self, path: Optional[str] = None, seed: Optional[int] = None) -> None:
@@ -216,7 +214,8 @@ class Engine:
         continue
       # take a gold only if available
       take_gold = gold_in_bank > 0
-      actions.append(ReserveCardAction.create(card_id, take_gold=take_gold))
+      if len(player.reserved_cards) < 3:
+        actions.append(ReserveCardAction.create(card_id, take_gold=take_gold))
       payments = can_afford(card, player)
       for payment in payments:
         actions.append(BuyCardAction.create(card_id, payment=payment))

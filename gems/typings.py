@@ -80,6 +80,9 @@ class GemList:
   def __repr__(self) -> str:  # pragma: no cover - convenience
     return f"GemList({self._pairs!r})"
 
+  def __str__(self) -> str:  # pragma: no cover - convenience
+    return "".join(f"{g.short_str()}{n}" for g, n in self._pairs if n > 0) or "Na"
+
 
 class ActionType(Enum):
   TAKE_3_DIFFERENT = "take_3_different"
