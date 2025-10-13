@@ -8,6 +8,23 @@ if TYPE_CHECKING:
   from .actions import Action
 
 
+def _apply_discounts(cost: Iterable[tuple["Gem", int]], discounts: "GemList") -> List[tuple["Gem", int]]:
+  """Return a list of (Gem, effective_amount) after applying discounts.
+
+  Discounts are a GemList of (Gem, amt) pairs representing permanent
+  bonuses from purchased cards. Effective amounts are floored at zero.
+  """
+  discount_map: Dict["Gem", int] = {g: n for g, n in discounts}
+  effective: List[tuple["Gem", int]] = []
+  for g, req in cost:
+    disc = discount_map.get(g, 0)
+    eff = req - disc
+    if eff < 0:
+      eff = 0
+    effective.append((g, eff))
+  return effective
+
+
 @dataclass(frozen=True)
 class PlayerState:
   """Per-player snapshot with small helper methods.
@@ -49,14 +66,18 @@ class PlayerState:
     player_gems: Dict[Gem, int] = {g: amt for g, amt in self.gems}
     gold_available = player_gems.get(Gem.GOLD, 0)
 
+    # Apply permanent discounts from purchased cards to the card cost
     requirements = list(card.cost)
-    if not requirements:
+    effective_requirements = _apply_discounts(requirements, self.discounts)
+
+    # If no effective requirements remain, the card is free (via discounts)
+    if not effective_requirements or all(req == 0 for _, req in effective_requirements):
       return [{}]
 
     ranges = []
     gems_order: List[Gem] = []
     req_amounts: List[int] = []
-    for g, req in requirements:
+    for g, req in effective_requirements:
       gems_order.append(g)
       req_amounts.append(req)
       have = player_gems.get(g, 0)

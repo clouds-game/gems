@@ -137,6 +137,11 @@ def test_random_agent_chooses_legal():
 - Suggested path for implementations: `gems/agents/` (create as needed).
 - Tests: `tests/test_agents.py` or extend existing engine tests in `tests/`.
 
+Note: the helper `PlayerState.can_afford` already accounts for permanent
+discounts awarded by purchased cards when evaluating affordability. Agents
+can rely on this behavior when constructing heuristics or simulating
+possible purchases.
+
 ## Quick checklist
 
 1. Provide __init__(seat_id, rng=None).
