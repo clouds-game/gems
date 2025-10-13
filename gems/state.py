@@ -81,6 +81,10 @@ class PlayerState:
 
     return payments
 
+  def can_reserve(self) -> bool:
+    """Return whether this player can reserve another card."""
+    return len(self.reserved_cards) < 3
+
   def get_legal_actions(self, state: GameState) -> List["Action"]:
     from .actions import (
       Action,
@@ -120,7 +124,7 @@ class PlayerState:
       if card_id is None:
         continue
       take_gold = gold_in_bank > 0
-      if len(player.reserved_cards) < 3:
+      if self.can_reserve():
         actions.append(ReserveCardAction.create(card_id, take_gold=take_gold))
       payments = player.can_afford(card)
       for payment in payments:

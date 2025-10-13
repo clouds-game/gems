@@ -178,64 +178,8 @@ class Engine:
 
     The method does not mutate engine state.
     """
-    state = self._state
-    if seat_id is None:
-      seat_id = state.turn % len(state.players)
-
-    player = state.players[seat_id]
-
-    # Build a simple bank lookup
-    bank = {g: amt for g, amt in state.bank}
-
-    actions: List[Action] = []
-
-    # take_3_different: any combination of 3 distinct gems with at least 1
-    available_gems = [g for g, amt in bank.items() if amt > 0 and g != Gem.GOLD]
-    from itertools import combinations
-    if len(available_gems) > 3:
-      # simple approach: choose any 3-combination (order not important)
-      for combo in combinations(available_gems, 3):
-        actions.append(Take3Action.create(*combo))
-    elif len(available_gems) != 0:
-      # if fewer than 3 types available, allow taking all available types
-      actions.append(Take3Action.create(*available_gems))
-
-    # take_2_same: allow gems with at least 4 tokens in bank
-    for g, amt in bank.items():
-      if g == Gem.GOLD:
-        continue
-      if amt >= 4:
-        actions.append(Take2Action.create(g, 2))
-
-    # reserve_card and buy_card for visible cards (if card has id); filter buy_card by affordability
-    gold_in_bank = bank.get(Gem.GOLD, 0)
-    for card in state.visible_cards:
-      card_id = getattr(card, 'id', None)
-      if card_id is None:
-        continue
-      # take a gold only if available
-      take_gold = gold_in_bank > 0
-      if len(player.reserved_cards) < 3:
-        actions.append(ReserveCardAction.create(card_id, take_gold=take_gold))
-      payments = player.can_afford(card)
-      for payment in payments:
-        actions.append(BuyCardAction.create(card_id, payment=payment))
-
-    # If no actions were found, provide a NOOP fallback so callers (and
-    # agents/tests) always receive at least one action to consider. This
-    # simplifies external code which can assume a non-empty action list.
-    if not actions:
-      return [Action.noop()]
-
-    return actions
-
-
-def can_afford(card: Card, player: PlayerState) -> List[Dict[Gem, int]]:
-  """Compatibility shim: delegate to PlayerState.can_afford."""
-  return player.can_afford(card)
-
-
-
+    seat_id = seat_id if seat_id is not None else self._state.turn % len(self._state.players)
+    return self._state.players[seat_id].get_legal_actions(self._state)
 
 
 def load_assets(path: Optional[str] = None):

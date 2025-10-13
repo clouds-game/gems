@@ -57,7 +57,6 @@ def test_buy_card_not_included_when_unaffordable_but_included_with_gold():
 def test_gold_allows_multiple_payment_combinations():
   from gems.typings import Card, Gem, GameState
   from gems.state import PlayerState
-  from gems.engine import can_afford
 
 
   e = Engine(2)
@@ -69,7 +68,7 @@ def test_gold_allows_multiple_payment_combinations():
   state = GameState(players=(p0, p1), bank=e.get_state().bank, visible_cards=(card,), turn=0)
   e._state = state
 
-  payments = can_afford(card, p0)
+  payments = p0.can_afford(card)
   # expect at least the three combinations: full colored, gold used for one of the colors
   expected = [
       {Gem.RED: 2, Gem.BLUE: 2},
