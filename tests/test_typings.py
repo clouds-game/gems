@@ -10,7 +10,7 @@ def test_card_roundtrip():
   assert c2.points == c.points
   assert c2.bonus == c.bonus
   assert tuple(c2.cost) == tuple(c.cost)
-  assert str(c) == "Card([2]G2:R2)"
+  assert str(c) == "Card([c1][2]G2:R2)"
 
 
 def test_role_roundtrip():

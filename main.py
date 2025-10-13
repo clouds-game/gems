@@ -8,6 +8,8 @@ from gems.engine import Engine
 from gems.agents.random import RandomAgent
 import random
 
+from gems.typings import ActionType
+
 
 if __name__ == "__main__":
   # initialize a 3-player game and run a short random-play simulation
@@ -21,7 +23,12 @@ if __name__ == "__main__":
 
   # Play until any player reaches 15 points (win condition) or no legal
   # actions are available for the current player.
+
+  all_noops = False
   while True:
+    if all_noops:
+      print("All players have only noop actions. Ending game.")
+      break
     state = engine.get_state()
     # check for winner
     scores = [p.score for p in state.players]
@@ -29,20 +36,25 @@ if __name__ == "__main__":
       winners = [p for p in state.players if p.score >= 15]
       print("Game finished — winner(s):")
       for w in winners:
-        print(f"  seat={w.seat_id} name={w.name!r} score={w.score} cards={len(w.purchased_cards)} reserved={len(w.reserved_cards)}")
+        print(
+            f"  seat={w.seat_id} name={w.name!r} score={w.score} cards={len(w.purchased_cards)} reserved={len(w.reserved_cards)}")
       break
 
-    seat = state.turn % len(state.players)
-    actions = engine.get_legal_actions(seat)
-    if not actions:
-      print(f"No legal actions available for player {seat}. Ending game.")
-      break
+    all_noops = True
+    for seat in range(len(state.players)):
+      state = engine.get_state()
+      actions = engine.get_legal_actions(seat)
+      if not actions or all(a.type == ActionType.NOOP for a in actions):
+        print(f"No legal actions available for player {seat}.")
+        continue
+      else:
+        all_noops = False
 
-    agent = agents[seat]
-    action = agent.act(state, actions)
-    print(f"Turn {state.turn} — player {seat} ({state.players[seat].name}) performs: {action}")
-    # apply action and update engine state via Action.apply
-    engine._state = action.apply(state)
-    engine.advance_turn()
-    # print a brief summary after the move
-    engine.print_summary()
+      agent = agents[seat]
+      action = agent.act(state, actions)
+      print(f"Turn {state.turn} — player {seat} performs: {action}")
+      # apply action and update engine state
+      engine._state = action.apply(state)
+      # print a brief summary after the move
+      engine.print_summary()
+      engine.advance_turn()

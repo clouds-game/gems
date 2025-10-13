@@ -156,10 +156,9 @@ class PlayerState:
       for payment in payments:
         actions.append(BuyCardAction.create(card.id, payment=payment))
 
-    for card in state.visible_cards:
-
-      take_gold = gold_in_bank > 0
-      if self.can_reserve():
+    if self.can_reserve():
+      for card in state.visible_cards:
+        take_gold = gold_in_bank > 0
         actions.append(ReserveCardAction.create(card.id, take_gold=take_gold))
 
     if not actions:
