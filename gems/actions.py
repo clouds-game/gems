@@ -81,9 +81,9 @@ class Take3Action(Action):
       player_gems[g] = player_gems.get(g, 0) + 1
 
     new_player = PlayerState(seat_id=player.seat_id, name=player.name,
-                             gems=GemList(player_gems), score=player.score,
-                             reserved_cards=tuple(player.reserved_cards),
-                             purchased_cards_in=tuple(player.purchased_cards))
+                             gems_in=player_gems, score=player.score,
+                             reserved_cards_in=player.reserved_cards,
+                             purchased_cards_in=player.purchased_cards)
     players[seat] = new_player
 
     new_bank = GemList(bank)
@@ -131,9 +131,9 @@ class Take2Action(Action):
     player_gems[gem] = player_gems.get(gem, 0) + count
 
     new_player = PlayerState(seat_id=player.seat_id, name=player.name,
-                             gems=GemList(player_gems), score=player.score,
-                             reserved_cards=tuple(player.reserved_cards),
-                             purchased_cards_in=tuple(player.purchased_cards))
+                             gems_in=player_gems, score=player.score,
+                             reserved_cards_in=player.reserved_cards,
+                             purchased_cards_in=player.purchased_cards)
     players[seat] = new_player
 
     new_bank = GemList(bank)
@@ -211,8 +211,8 @@ class BuyCardAction(Action):
       new_reserved = tuple(player.reserved_cards)
 
     new_player = PlayerState(seat_id=player.seat_id, name=player.name,
-                             gems=GemList(player_gems), score=new_score,
-                             reserved_cards=new_reserved,
+                             gems_in=player_gems, score=new_score,
+                             reserved_cards_in=new_reserved,
                              purchased_cards_in=new_purchased)
     players[seat] = new_player
 
@@ -268,9 +268,9 @@ class ReserveCardAction(Action):
     # create new player with reserved card added
     new_reserved = tuple(player.reserved_cards) + (found,)
     new_player = PlayerState(seat_id=player.seat_id, name=player.name,
-                             gems=GemList(player_gems), score=player.score,
-                             reserved_cards=new_reserved,
-                             purchased_cards_in=tuple(player.purchased_cards))
+                             gems_in=player_gems, score=player.score,
+                             reserved_cards_in=new_reserved,
+                             purchased_cards_in=player.purchased_cards)
     players[seat] = new_player
 
     new_bank = GemList(bank)

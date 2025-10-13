@@ -87,7 +87,7 @@ class Engine:
 
     visible_cards = tuple()
 
-    return GameState(players=tuple(players), bank=bank, visible_cards=visible_cards, turn=0)
+    return GameState(players=tuple(players), bank_in=bank, visible_cards=visible_cards, turn=0)
 
   def reset(self, num_players: Optional[int] = None, names: Optional[List[str]] = None) -> None:
     """Reset the engine's internal GameState.

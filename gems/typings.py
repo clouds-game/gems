@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field, InitVar
+from dataclasses import MISSING, dataclass, field, InitVar
 from enum import Enum
 from typing import Any, Optional, Tuple, Iterable, Mapping, Union, TYPE_CHECKING, Iterator
 
@@ -199,23 +199,27 @@ class PlayerState:
   """
   seat_id: int
   name: Optional[str] = None
+  gems_in: InitVar[Iterable[tuple[Gem, int]] | Mapping[Gem, int] | GemList | None] = None
   gems: GemList = field(default_factory=GemList)
   score: int = 0
   # cards the player has reserved but not yet purchased
-  reserved_cards: Tuple[Card, ...] = field(default_factory=tuple)
+  reserved_cards_in: InitVar[Iterable[Card]] = ()
+  reserved_cards: tuple[Card, ...] = field(init=False, default_factory=tuple)
   # cards the player has purchased (permanent bonuses / points)
   purchased_cards_in: InitVar[Iterable[Card]] = ()
-  purchased_cards: Tuple[Card, ...] = field(init=False, default_factory=tuple)
+  purchased_cards: tuple[Card, ...] = field(init=False, default_factory=tuple)
   # per-gem permanent discounts are derived from purchased_cards: each
   # purchased card may have a `bonus` Gem that gives a permanent -1 cost
   # for that Gem. `discounts` stores the aggregated counts as an
   # immutable tuple of (Gem, amount) pairs.
   discounts: GemList = field(init=False, default_factory=GemList)
 
-  def __post_init__(self, purchased_cards_in):
+  def __post_init__(self, gems_in, reserved_cards_in, purchased_cards_in):
     # normalize reserved_cards and purchased_cards into tuples so the
     # public attributes remain immutable even when callers pass lists.
-    object.__setattr__(self, 'reserved_cards', tuple(self.reserved_cards))
+    if gems_in is not None:
+      object.__setattr__(self, 'gems', GemList(_to_kv_tuple(gems_in)))
+    object.__setattr__(self, 'reserved_cards', tuple(reserved_cards_in))
     purchased = tuple(purchased_cards_in)
     object.__setattr__(self, 'purchased_cards', purchased)
 
@@ -238,15 +242,17 @@ class GameState:
   """
   players: Tuple[PlayerState, ...]
   # bank is represented as an immutable tuple of (resource, amount).
+  bank_in: InitVar[Iterable[Tuple[Gem, int]] | Mapping[Gem, int] | GemList | None] = None
   bank: GemList = field(default_factory=GemList)
   visible_cards: Tuple[Card, ...] = field(default_factory=tuple)
   turn: int = 0
   last_action: Optional["Action"] = None
 
-  def __post_init__(self):
+  def __post_init__(self, bank_in):
     # normalize inputs into tuples where appropriate so the public
     # API is always immutable. Allow callers to provide dicts or
     # iterables; we try to be forgiving.
-    object.__setattr__(self, 'bank', GemList(_to_kv_tuple(self.bank)))
+    if bank_in is not None:
+      object.__setattr__(self, 'bank', GemList(_to_kv_tuple(bank_in)))
     object.__setattr__(self, 'players', tuple(self.players))
     object.__setattr__(self, 'visible_cards', tuple(self.visible_cards))

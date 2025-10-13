@@ -12,12 +12,12 @@ from gems.typings import Gem, GameState, PlayerState, Card
 def make_basic_state():
   # two players, bank with some tokens, one visible card
   players = (
-    PlayerState(seat_id=0, name='P0', gems=((Gem.RED, 0), (Gem.BLUE, 0))),
-    PlayerState(seat_id=1, name='P1', gems=((Gem.RED, 0), (Gem.BLUE, 0))),
+    PlayerState(seat_id=0, name='P0', gems_in=((Gem.RED, 0), (Gem.BLUE, 0))),
+    PlayerState(seat_id=1, name='P1', gems_in=((Gem.RED, 0), (Gem.BLUE, 0))),
   )
   bank = {Gem.RED: 4, Gem.BLUE: 4, Gem.GOLD: 1, Gem.WHITE: 4, Gem.BLACK: 4, Gem.GREEN: 4}
   card = Card(id='c1', level=1, points=1, bonus=Gem.RED, cost_in={Gem.RED: 1})
-  state = GameState(players=players, bank=tuple(bank.items()), visible_cards=(card,), turn=0)
+  state = GameState(players=players, bank_in=bank.items(), visible_cards=(card,), turn=0)
   return state
 
 
@@ -79,7 +79,7 @@ def test_buy_apply_from_visible():
   state = make_basic_state()
   # Give player a red gem to pay for the card
   p0 = state.players[0]
-  p0_with_gems = PlayerState(seat_id=0, name='P0', gems=((Gem.RED, 1),))
+  p0_with_gems = PlayerState(seat_id=0, name='P0', gems_in=((Gem.RED, 1),))
   players = (p0_with_gems, state.players[1])
   state = GameState(players=players, bank=state.bank, visible_cards=state.visible_cards, turn=0)
   action = BuyCardAction.create('c1', payment={Gem.RED: 1})
