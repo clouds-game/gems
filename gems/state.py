@@ -163,3 +163,37 @@ class GameState:
       object.__setattr__(self, 'visible_cards', CardList(visible_cards_in))
     object.__setattr__(self, 'players', tuple(self.players))
     object.__setattr__(self, 'visible_cards', CardList(self.visible_cards))
+
+  def advance_turn(self, decks_by_level: Optional[Dict[int, List[Card]]] = None, per_level: int = 4) -> 'GameState':
+    """Return a new GameState with the turn advanced by one.
+
+    If `decks_by_level` is provided (a mutable mapping level->list[Card])
+    the method will attempt to top up visible cards so that there are
+    `per_level` cards for each level present. This operation will pop
+    cards from the provided decks (mutating them) similar to how the
+    `Engine` draws cards. If `decks_by_level` is omitted no visible-card
+    refilling is performed.
+    """
+    # Start with current visible cards as a list we can extend
+    visible = list(self.visible_cards)
+
+    if decks_by_level is not None:
+      # Count how many visible cards we currently have per level
+      counts: Dict[int, int] = {}
+      for c in visible:
+        lvl = getattr(c, 'level', None)
+        if lvl is None:
+          continue
+        counts[lvl] = counts.get(lvl, 0) + 1
+
+      # For each known level in the decks, draw up to per_level
+      for lvl, deck in decks_by_level.items():
+        need = per_level - counts.get(lvl, 0)
+        for _ in range(min(need, len(deck))):
+          # pop from the end (deck treated LIFO with end as top)
+          visible.append(deck.pop())
+
+    # Return a new GameState with incremented turn and updated visible_cards
+    return GameState(players=self.players, bank=self.bank,
+                     visible_cards_in=visible, turn=self.turn + 1,
+                     last_action=self.last_action)
