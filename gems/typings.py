@@ -1,17 +1,8 @@
 from dataclasses import MISSING, dataclass, field, InitVar
 from enum import Enum
-from typing import Any, Optional, Tuple, Iterable, Mapping, Union, TYPE_CHECKING, Iterator
-
-if TYPE_CHECKING:
-  from .actions import Action
-  from .state import PlayerState
-
+from typing import Any, Optional, Tuple, Iterable, Mapping, Union, Iterator
 
 from .utils import _to_kv_tuple
-
-
-
-
 
 class Gem(Enum):
   """Enumeration of gem/resource types used across the engine.
@@ -35,7 +26,6 @@ class Gem(Enum):
     if self == Gem.GOLD:
       return 'D'  # avoid confusion with GREEN
     return self.value[0].upper()
-
 
 
 @dataclass(frozen=True)
@@ -85,10 +75,6 @@ class ActionType(Enum):
 
   def __str__(self) -> str:
     return self.value
-
-
-# Action classes live in `gems.action`. Avoid importing them here to keep
-# these core typings independent from the action implementation.
 
 
 @dataclass(frozen=True)
@@ -146,7 +132,6 @@ class Card:
     costs = "".join(f"{g.short_str()}{n}" for g, n in self.cost)
     return f"Card([{self.level}]{bonus}{points}:{costs})"
 
-
 @dataclass(frozen=True)
 class Role:
   """Represents a special role/noble with requirements and point reward.
@@ -184,34 +169,3 @@ class Role:
     metadata = tuple(d.get('metadata', ()))
     return cls(id=d.get('id'), name=d.get('name'), points=d.get('points', 0),
                requirements_in=reqs, metadata_in=metadata)
-
-
-# PlayerState moved to `gems.state` to keep runtime logic separate from
-# pure type dataclasses. Import `PlayerState` from `gems.state` where
-# needed.
-
-
-
-@dataclass(frozen=True)
-class GameState:
-  """A read-only view of the full public game state.
-
-  Fields are converted to immutable tuples so agents can safely treat the
-  object as read-only.
-  """
-  players: Tuple["PlayerState", ...]
-  # bank is represented as an immutable tuple of (resource, amount).
-  bank_in: InitVar[Iterable[Tuple[Gem, int]] | Mapping[Gem, int] | GemList | None] = None
-  bank: GemList = field(default_factory=GemList)
-  visible_cards: Tuple[Card, ...] = field(default_factory=tuple)
-  turn: int = 0
-  last_action: Optional["Action"] = None
-
-  def __post_init__(self, bank_in):
-    # normalize inputs into tuples where appropriate so the public
-    # API is always immutable. Allow callers to provide dicts or
-    # iterables; we try to be forgiving.
-    if bank_in is not None:
-      object.__setattr__(self, 'bank', GemList(_to_kv_tuple(bank_in)))
-    object.__setattr__(self, 'players', tuple(self.players))
-    object.__setattr__(self, 'visible_cards', tuple(self.visible_cards))

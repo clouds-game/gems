@@ -2,8 +2,8 @@ from dataclasses import dataclass, field
 from typing import Optional, Mapping, Tuple
 from abc import ABC, abstractmethod
 
-from .typings import Gem, ActionType, GameState, GemList
-from .state import PlayerState
+from .typings import Gem, ActionType, GemList
+from .state import PlayerState, GameState
 from .utils import _replace_tuple
 
 

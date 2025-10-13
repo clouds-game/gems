@@ -1,7 +1,7 @@
 import pytest
 
 from gems import Engine
-from gems.typings import GameState
+from gems.state import GameState
 
 
 def test_engine_init_and_get_state():

@@ -1,8 +1,7 @@
 import pytest
 from gems import Engine
-from gems.typings import ActionType, Gem, GameState, GemList
-from gems.typings import Card
-from gems.state import PlayerState
+from gems.typings import ActionType, Gem, Card, GemList
+from gems.state import PlayerState, GameState
 
 def test_get_legal_actions_basic():
   e = Engine(2)
@@ -16,9 +15,6 @@ def test_get_legal_actions_basic():
 
 def test_buy_card_included_when_affordable():
   # create engine and replace state with a known affordable visible card
-  from gems.typings import Card, Gem, GameState
-  from gems.state import PlayerState
-
   e = Engine(2)
   card = Card(id='buy-1', cost_in=[(Gem.BLACK, 2)])
   p0 = PlayerState(seat_id=0, gems=GemList(((Gem.BLACK, 2),)))
@@ -33,9 +29,6 @@ def test_buy_card_included_when_affordable():
 
 def test_buy_card_not_included_when_unaffordable_but_included_with_gold():
   # unaffordable without gold
-  from gems.typings import Card, Gem, GameState
-  from gems.state import PlayerState
-
   e = Engine(2)
   card = Card(id='buy-2', cost_in=[(Gem.BLACK, 3)])
   p0 = PlayerState(seat_id=0, gems=GemList(((Gem.BLACK, 2),)))
@@ -55,10 +48,6 @@ def test_buy_card_not_included_when_unaffordable_but_included_with_gold():
 
 
 def test_gold_allows_multiple_payment_combinations():
-  from gems.typings import Card, Gem, GameState
-  from gems.state import PlayerState
-
-
   e = Engine(2)
   # card requires 2 red and 2 blue
   card = Card(id='multi-1', cost_in=[(Gem.RED, 2), (Gem.BLUE, 2)])

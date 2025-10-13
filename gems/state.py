@@ -1,7 +1,7 @@
 from dataclasses import InitVar, dataclass, field
 from typing import Iterable, Mapping, Optional, List, Dict, TYPE_CHECKING
 
-from .typings import Gem, GemList, Card, GameState
+from .typings import Gem, GemList, Card
 from .utils import _to_kv_tuple
 
 if TYPE_CHECKING:
@@ -86,7 +86,7 @@ class PlayerState:
     """Return whether this player can reserve another card."""
     return len(self.reserved_cards) < 3
 
-  def get_legal_actions(self, state: GameState) -> List["Action"]:
+  def get_legal_actions(self, state: "GameState") -> List["Action"]:
     from .actions import (
       Action,
       Take3Action,
@@ -135,3 +135,28 @@ class PlayerState:
       return [Action.noop()]
 
     return actions
+
+
+@dataclass(frozen=True)
+class GameState:
+  """A read-only view of the full public game state.
+
+  Fields are converted to immutable tuples so agents can safely treat the
+  object as read-only.
+  """
+  players: tuple["PlayerState", ...]
+  # bank is represented as an immutable tuple of (resource, amount).
+  bank_in: InitVar[Iterable[tuple[Gem, int]] | Mapping[Gem, int] | GemList | None] = None
+  bank: GemList = field(default_factory=GemList)
+  visible_cards: tuple[Card, ...] = field(default_factory=tuple)
+  turn: int = 0
+  last_action: Optional["Action"] = None
+
+  def __post_init__(self, bank_in):
+    # normalize inputs into tuples where appropriate so the public
+    # API is always immutable. Allow callers to provide dicts or
+    # iterables; we try to be forgiving.
+    if bank_in is not None:
+      object.__setattr__(self, 'bank', GemList(_to_kv_tuple(bank_in)))
+    object.__setattr__(self, 'players', tuple(self.players))
+    object.__setattr__(self, 'visible_cards', tuple(self.visible_cards))

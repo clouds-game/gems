@@ -6,8 +6,8 @@ from gems.actions import (
   NoopAction,
   apply_action_and_advance,
 )
-from gems.typings import Gem, GameState, Card
-from gems.state import PlayerState
+from gems.typings import Gem, Card
+from gems.state import PlayerState, GameState
 
 
 def make_basic_state():
