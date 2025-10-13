@@ -48,6 +48,13 @@ class Action(ABC):
     caller/engine.
     """
 
+  @abstractmethod
+  def check(self, player: PlayerState, state: GameState) -> bool:
+    """Return True if this action could be applied for `player` in `state`.
+    Implementations should perform non-mutating validation equivalent to
+    what `apply` would enforce.
+    """
+
 
 @dataclass(frozen=True)
 class Take3Action(Action):
@@ -90,6 +97,13 @@ class Take3Action(Action):
     return GameState(players=players, bank_in=bank,
                      visible_cards_in=visible_cards, turn=state.turn,
                      last_action=self)
+
+  def check(self, player: PlayerState, state: GameState) -> bool:
+    bank = dict(state.bank)
+    for g in self.gems:
+      if bank.get(g, 0) <= 0:
+        return False
+    return True
 
 
 @dataclass(frozen=True)
@@ -138,6 +152,12 @@ class Take2Action(Action):
                      visible_cards_in=visible_cards, turn=state.turn,
                      last_action=self)
 
+  def check(self, player: PlayerState, state: GameState) -> bool:
+    if self.gem == Gem.GOLD:
+      return False
+    if state.bank.get(self.gem) < 4:
+      return False
+    return True
 
 @dataclass(frozen=True)
 class BuyCardAction(Action):
@@ -215,6 +235,12 @@ class BuyCardAction(Action):
                      visible_cards_in=visible_cards, turn=state.turn,
                      last_action=self)
 
+  def check(self, player: PlayerState, state: GameState) -> bool:
+    card = state.visible_cards.get(self.card_id)
+    if card is None:
+      return False
+    return player.check_afford(card, dict(self.payment))
+
 
 @dataclass(frozen=True)
 class ReserveCardAction(Action):
@@ -271,32 +297,14 @@ class ReserveCardAction(Action):
                      visible_cards_in=visible_cards, turn=state.turn,
                      last_action=self)
 
-
-def apply_action(state: GameState, action: Action) -> GameState:
-  """Apply `action` for the current-turn player and return a new GameState.
-
-  The function does not mutate the provided `state`. It treats the player
-  whose turn it is as `state.turn % len(state.players)`.
-
-  Supported actions: TAKE_3_DIFFERENT, TAKE_2_SAME, RESERVE_CARD, BUY_CARD.
-  Basic validation is performed (e.g. bank has enough tokens). More
-  sophisticated rule checks are intentionally left to higher-level code.
-  """
-  return action.apply(state)
-
-
-def apply_action_and_advance(state: GameState, action: Action) -> GameState:
-  """Apply `action` for the current-turn player and return a new GameState
-  with the turn advanced by one.
-
-  This helper calls the action's `apply` (which must not modify `turn`) and
-  then returns a copy with `turn` incremented by 1.
-  """
-  new_state = action.apply(state)
-  return GameState(players=new_state.players, bank=new_state.bank,
-                   visible_cards=new_state.visible_cards, turn=new_state.turn + 1,
-                   last_action=new_state.last_action)
-
+  def check(self, player: PlayerState, state: GameState) -> bool:
+    if not player.can_reserve():
+      return False
+    if state.visible_cards.get(self.card_id) is None:
+      return False
+    if self.take_gold and state.bank.get(Gem.GOLD) <= 0:
+      return False
+    return True
 
 @dataclass(frozen=True)
 class NoopAction(Action):
@@ -314,3 +322,6 @@ class NoopAction(Action):
     return GameState(players=state.players, bank=state.bank,
                      visible_cards=state.visible_cards, turn=state.turn,
                      last_action=self)
+
+  def check(self, player: PlayerState, state: GameState) -> bool:
+    return True

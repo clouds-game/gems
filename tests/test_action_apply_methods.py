@@ -4,7 +4,6 @@ from gems.actions import (
   BuyCardAction,
   ReserveCardAction,
   NoopAction,
-  apply_action_and_advance,
 )
 from gems.typings import Gem, Card
 from gems.state import PlayerState, GameState
@@ -18,7 +17,7 @@ def make_basic_state():
   )
   bank = {Gem.RED: 4, Gem.BLUE: 4, Gem.GOLD: 1, Gem.WHITE: 4, Gem.BLACK: 4, Gem.GREEN: 4}
   card = Card(id='c1', level=1, points=1, bonus=Gem.RED, cost_in={Gem.RED: 1})
-  state = GameState(players=players, bank_in=bank.items(), visible_cards=(card,), turn=0)
+  state = GameState(players=players, bank_in=bank.items(), visible_cards_in=(card,), turn=0)
   return state
 
 
@@ -69,11 +68,6 @@ def test_noop_and_advance_adjacent_to_reserve():
   assert applied.turn == state.turn
   # last_action should be set to the noop
   assert getattr(applied, 'last_action') == noop
-
-  # apply_action_and_advance should advance the turn by 1
-  advanced = apply_action_and_advance(state, noop)
-  assert advanced.turn == state.turn + 1
-  assert getattr(advanced, 'last_action') == noop
 
 
 def test_buy_apply_from_visible():

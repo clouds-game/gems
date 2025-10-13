@@ -53,6 +53,9 @@ class GemList:
   def __getitem__(self, i):
     return self._pairs[i]
 
+  def get(self, gem: Gem) -> int:
+    return dict(self._pairs).get(gem, 0)
+
   def to_dict(self) -> dict:
     return {g: n for g, n in self._pairs}
 
@@ -165,6 +168,13 @@ class CardList:
   def get_level(self, level: int) -> 'CardList':
     """Return a new CardList containing only cards with the given level."""
     return CardList([c for c in self._items if c.level == level])
+
+  def get(self, card_id: str) -> Card | None:
+    """Return the Card with the given ID, or None if not found."""
+    for c in self._items:
+      if c.id == card_id:
+        return c
+    return None
 
 
 @dataclass(frozen=True)

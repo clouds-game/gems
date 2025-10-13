@@ -57,6 +57,12 @@ class PlayerState:
         counts[c.bonus] = counts.get(c.bonus, 0) + 1
     object.__setattr__(self, 'discounts', GemList(tuple(counts.items())))
 
+  def check_afford(self, card: Card, payment: Dict[Gem, int]) -> bool:
+    """Check if the given payment dict is a valid way to afford the card."""
+    # TODO: improve performance
+    possible_payments = self.can_afford(card)
+    return payment in possible_payments
+
   def can_afford(self, card: Card) -> List[Dict[Gem, int]]:
     """Return all exact payment dicts this player could use to buy `card`.
 
