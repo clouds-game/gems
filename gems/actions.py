@@ -37,8 +37,32 @@ class Action(ABC):
   def noop(cls) -> 'NoopAction':
     return NoopAction.create()
 
-  @abstractmethod
   def apply(self, state: GameState) -> GameState:
+    """Apply this action for the current-turn player and return a new GameState.
+
+    This is a thin wrapper that validates the action can be applied
+    for the current player in the given state, then calls the concrete
+    `_apply` method implemented by subclasses.
+
+    Implementations must not mutate the provided `state` and must
+    return a new GameState with `last_action` set to this action.
+    Implementations MUST NOT modify the `turn` field; turn advancement
+    is the responsibility of the caller/engine.
+    """
+    num_players = len(state.players)
+    if num_players == 0:
+      raise ValueError("state must contain at least one player")
+
+    seat = state.turn % num_players
+    player = state.players[seat]
+
+    if not self._check(player, state):
+      raise ValueError(f"Action {self} cannot be applied for player {player} in state {state}")
+
+    return self._apply(player, state)
+
+  @abstractmethod
+  def _apply(self, player: PlayerState, state: GameState) -> GameState:
     """Apply this action for the current-turn player and return a new GameState.
 
     Concrete action classes must implement this. Implementations must not
@@ -49,7 +73,7 @@ class Action(ABC):
     """
 
   @abstractmethod
-  def check(self, player: PlayerState, state: GameState) -> bool:
+  def _check(self, player: PlayerState, state: GameState) -> bool:
     """Return True if this action could be applied for `player` in `state`.
     Implementations should perform non-mutating validation equivalent to
     what `apply` would enforce.
@@ -68,14 +92,7 @@ class Take3Action(Action):
     gem_str = ''.join(g.short_str() for g in self.gems)
     return f"Action.Take3(gems=[{gem_str}])"
 
-  def apply(self, state: GameState) -> GameState:
-    num_players = len(state.players)
-    if num_players == 0:
-      raise ValueError("state must contain at least one player")
-
-    seat = state.turn % num_players
-    player = state.players[seat]
-
+  def _apply(self, player: PlayerState, state: GameState) -> GameState:
     # Mutable working copies: convert GemList/tuples into mutable dicts/lists
     bank = dict(state.bank)
     player_gems = dict(player.gems)
@@ -92,13 +109,13 @@ class Take3Action(Action):
                              gems_in=player_gems, score=player.score,
                              reserved_cards_in=player.reserved_cards,
                              purchased_cards_in=player.purchased_cards)
-    players = _replace_tuple(state.players, seat, new_player)
+    players = _replace_tuple(state.players, player.seat_id, new_player)
 
     return GameState(players=players, bank_in=bank,
                      visible_cards_in=visible_cards, turn=state.turn,
                      last_action=self)
 
-  def check(self, player: PlayerState, state: GameState) -> bool:
+  def _check(self, player: PlayerState, state: GameState) -> bool:
     bank = dict(state.bank)
     for g in self.gems:
       if bank.get(g, 0) <= 0:
@@ -120,14 +137,7 @@ class Take2Action(Action):
       return f"Action.Take2({self.gem.short_str()}{self.count})"
     return f"Action.Take2({self.gem.short_str()})"
 
-  def apply(self, state: GameState) -> GameState:
-    num_players = len(state.players)
-    if num_players == 0:
-      raise ValueError("state must contain at least one player")
-
-    seat = state.turn % num_players
-    player = state.players[seat]
-
+  def _apply(self, player: PlayerState, state: GameState) -> GameState:
     # Mutable working copies: convert GemList/tuples into mutable dicts/lists
     bank = dict(state.bank)
     player_gems = dict(player.gems)
@@ -146,13 +156,13 @@ class Take2Action(Action):
                              gems_in=player_gems, score=player.score,
                              reserved_cards_in=player.reserved_cards,
                              purchased_cards_in=player.purchased_cards)
-    players = _replace_tuple(state.players, seat, new_player)
+    players = _replace_tuple(state.players, player.seat_id, new_player)
 
     return GameState(players=players, bank_in=bank,
                      visible_cards_in=visible_cards, turn=state.turn,
                      last_action=self)
 
-  def check(self, player: PlayerState, state: GameState) -> bool:
+  def _check(self, player: PlayerState, state: GameState) -> bool:
     if self.gem == Gem.GOLD:
       return False
     if state.bank.get(self.gem) < 4:
@@ -173,14 +183,7 @@ class BuyCardAction(Action):
     pay_str = ''.join(f"{g.short_str()}{n}" for g, n in self.payment)
     return f"Action.Buy({self.card_id}, {pay_str})"
 
-  def apply(self, state: GameState) -> GameState:
-    num_players = len(state.players)
-    if num_players == 0:
-      raise ValueError("state must contain at least one player")
-
-    seat = state.turn % num_players
-    player = state.players[seat]
-
+  def _apply(self, player: PlayerState, state: GameState) -> GameState:
     # Mutable working copies
     bank = dict(state.bank)
     player_gems = dict(player.gems)
@@ -229,13 +232,13 @@ class BuyCardAction(Action):
                              gems_in=player_gems, score=new_score,
                              reserved_cards_in=new_reserved,
                              purchased_cards_in=new_purchased)
-    players = _replace_tuple(state.players, seat, new_player)
+    players = _replace_tuple(state.players, player.seat_id, new_player)
 
     return GameState(players=players, bank_in=bank,
                      visible_cards_in=visible_cards, turn=state.turn,
                      last_action=self)
 
-  def check(self, player: PlayerState, state: GameState) -> bool:
+  def _check(self, player: PlayerState, state: GameState) -> bool:
     card = state.visible_cards.get(self.card_id)
     if card is None:
       return False
@@ -256,14 +259,7 @@ class ReserveCardAction(Action):
       return f"Action.Reserve({self.card_id}, D)"
     return f"Action.Reserve({self.card_id})"
 
-  def apply(self, state: GameState) -> GameState:
-    num_players = len(state.players)
-    if num_players == 0:
-      raise ValueError("state must contain at least one player")
-
-    seat = state.turn % num_players
-    player = state.players[seat]
-
+  def _apply(self, player: PlayerState, state: GameState) -> GameState:
     # Mutable working copies
     bank = dict(state.bank)
     player_gems = dict(player.gems)
@@ -291,13 +287,13 @@ class ReserveCardAction(Action):
                              gems_in=player_gems, score=player.score,
                              reserved_cards_in=new_reserved,
                              purchased_cards_in=player.purchased_cards)
-    players = _replace_tuple(state.players, seat, new_player)
+    players = _replace_tuple(state.players, player.seat_id, new_player)
 
     return GameState(players=players, bank_in=bank,
                      visible_cards_in=visible_cards, turn=state.turn,
                      last_action=self)
 
-  def check(self, player: PlayerState, state: GameState) -> bool:
+  def _check(self, player: PlayerState, state: GameState) -> bool:
     if not player.can_reserve():
       return False
     if state.visible_cards.get(self.card_id) is None:
@@ -317,11 +313,11 @@ class NoopAction(Action):
   def __str__(self) -> str:  # pragma: no cover - trivial
     return "Action.Noop()"
 
-  def apply(self, state: GameState) -> GameState:
+  def _apply(self, player: PlayerState, state: GameState) -> GameState:
     # simply return a new GameState with last_action set (do not modify turn)
     return GameState(players=state.players, bank=state.bank,
                      visible_cards=state.visible_cards, turn=state.turn,
                      last_action=self)
 
-  def check(self, player: PlayerState, state: GameState) -> bool:
+  def _check(self, player: PlayerState, state: GameState) -> bool:
     return True
