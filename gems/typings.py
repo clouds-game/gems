@@ -89,7 +89,7 @@ class Card:
   - `bonus` is an optional Gem awarded permanently after purchase.
   - `cost` is an immutable tuple of (Gem, amount) pairs.
   """
-  id: Optional[str] = None
+  id: str
   name: Optional[str] = None
   level: int = 1
   points: int = 0
@@ -123,7 +123,11 @@ class Card:
     bonus = Gem(d['bonus']) if d.get('bonus') is not None else None
     cost = tuple((Gem(g), n) for g, n in d.get('cost', ()))
     metadata = tuple(d.get('metadata', ()))
-    return cls(id=d.get('id'), name=d.get('name'), level=d.get('level', 1),
+    # Ensure id is always a string (use empty string as default)
+    cid = d.get('id')
+    if not cid:
+      raise Exception("Card id is required")
+    return cls(id=cid, name=d.get('name'), level=d.get('level', 1),
                points=d.get('points', 0), bonus=bonus, cost_in=cost,
                metadata_in=metadata)
 

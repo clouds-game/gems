@@ -151,17 +151,13 @@ class PlayerState:
     # visible_cards = state.visible_cards + self.reserved_cards
 
     for card in state.visible_cards + self.reserved_cards:
-      # TODO card_id shoule not be none
-      card_id = getattr(card, 'id', None)
-      if card_id is None:
-        continue
+
       payments = player.can_afford(card)
       for payment in payments:
-        actions.append(BuyCardAction.create(card_id, payment=payment))
+        actions.append(BuyCardAction.create(card.id, payment=payment))
 
     for card in state.visible_cards:
-      if card.id is None:
-        continue
+
       take_gold = gold_in_bank > 0
       if self.can_reserve():
         actions.append(ReserveCardAction.create(card.id, take_gold=take_gold))
@@ -216,9 +212,7 @@ class GameState:
       # Count how many visible cards we currently have per level
       counts: Dict[int, int] = {}
       for c in visible:
-        lvl = getattr(c, 'level', None)
-        if lvl is None:
-          continue
+        lvl = c.level
         counts[lvl] = counts.get(lvl, 0) + 1
 
       # For each known level in the decks, draw up to per_level

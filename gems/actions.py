@@ -189,21 +189,21 @@ class BuyCardAction(Action):
     player_gems = dict(player.gems)
     visible_cards = list(state.visible_cards)
 
-    card_id = getattr(self, 'card_id')
+    card_id = self.card_id
     payment = dict(getattr(self, 'payment', ()))
     # locate card either in visible_cards or in player's reserved_cards
     found = None
     from_reserved = False
     reserved_list: list = []
     for i, c in enumerate(visible_cards):
-      if getattr(c, 'id', None) == card_id:
+      if c.id == card_id:
         found = visible_cards.pop(i)
         from_reserved = False
         break
     if found is None:
       # check reserved
       for i, c in enumerate(player.reserved_cards):
-        if getattr(c, 'id', None) == card_id:
+        if c.id == card_id:
           # remove from player's reserved list
           reserved_list = list(player.reserved_cards)
           found = reserved_list.pop(i)
