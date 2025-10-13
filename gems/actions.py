@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 from typing import Optional, Mapping, Tuple
 from abc import ABC, abstractmethod
 
-from .typings import Gem, ActionType, GemList
+from .typings import Gem, ActionType, GemList, Card
 from .state import PlayerState, GameState
 from .utils import _replace_tuple
 
@@ -26,12 +26,12 @@ class Action(ABC):
     return Take2Action.create(gem, count)
 
   @classmethod
-  def buy(cls, card_id: str, payment: Optional[Mapping[Gem, int]] = None) -> 'BuyCardAction':
-    return BuyCardAction.create(card_id, payment=payment)
+  def buy(cls, card: Card, payment: Optional[Mapping[Gem, int]] = None) -> 'BuyCardAction':
+    return BuyCardAction.create(card, payment=payment)
 
   @classmethod
-  def reserve(cls, card_id: str, take_gold: bool = True) -> 'ReserveCardAction':
-    return ReserveCardAction.create(card_id, take_gold=take_gold)
+  def reserve(cls, card: Card, take_gold: bool = True) -> 'ReserveCardAction':
+    return ReserveCardAction.create(card, take_gold=take_gold)
 
   @classmethod
   def noop(cls) -> 'NoopAction':
@@ -171,17 +171,17 @@ class Take2Action(Action):
 
 @dataclass(frozen=True)
 class BuyCardAction(Action):
-  card_id: str = ''
+  card: Card
   payment: GemList = field(default_factory=GemList)
 
   @classmethod
-  def create(cls, card_id: str, payment: Optional[Mapping[Gem, int]] = None) -> 'BuyCardAction':
+  def create(cls, card: Card, payment: Optional[Mapping[Gem, int]] = None) -> 'BuyCardAction':
     pay = GemList(dict(payment) if payment is not None else {})
-    return cls(type=ActionType.BUY_CARD, card_id=card_id, payment=pay)
+    return cls(type=ActionType.BUY_CARD, card=card, payment=pay)
 
   def __str__(self) -> str:
     pay_str = ''.join(f"{g.short_str()}{n}" for g, n in self.payment)
-    return f"Action.Buy({self.card_id}, {pay_str})"
+    return f"Action.Buy({self.card.id}, {pay_str})"
 
   def _apply(self, player: PlayerState, state: GameState) -> GameState:
     # Mutable working copies
@@ -189,21 +189,21 @@ class BuyCardAction(Action):
     player_gems = dict(player.gems)
     visible_cards = list(state.visible_cards)
 
-    card_id = self.card_id
+    card = self.card
     payment = dict(getattr(self, 'payment', ()))
     # locate card either in visible_cards or in player's reserved_cards
     found = None
     from_reserved = False
     reserved_list: list = []
     for i, c in enumerate(visible_cards):
-      if c.id == card_id:
+      if c.id == card.id:
         found = visible_cards.pop(i)
         from_reserved = False
         break
     if found is None:
       # check reserved
       for i, c in enumerate(player.reserved_cards):
-        if c.id == card_id:
+        if c.id == card.id:
           # remove from player's reserved list
           reserved_list = list(player.reserved_cards)
           found = reserved_list.pop(i)
@@ -239,27 +239,26 @@ class BuyCardAction(Action):
                      last_action=self)
 
   def _check(self, player: PlayerState, state: GameState) -> bool:
-    # allow buying a card either from the visible cards or from the player's
-    # own reserved cards
-    card = state.visible_cards.get(self.card_id) or player.reserved_cards.get(self.card_id)
-    if card is None:
+    card = self.card
+    # Ensure card is either among visible or reserved
+    if state.visible_cards.get(card.id) is None and player.reserved_cards.get(card.id) is None:
       return False
     return player.check_afford(card, dict(self.payment))
 
 
 @dataclass(frozen=True)
 class ReserveCardAction(Action):
-  card_id: str = ''
+  card: Card
   take_gold: bool = True
 
   @classmethod
-  def create(cls, card_id: str, take_gold: bool = True) -> 'ReserveCardAction':
-    return cls(type=ActionType.RESERVE_CARD, card_id=card_id, take_gold=bool(take_gold))
+  def create(cls, card: Card, take_gold: bool = True) -> 'ReserveCardAction':
+    return cls(type=ActionType.RESERVE_CARD, card=card, take_gold=bool(take_gold))
 
   def __str__(self) -> str:
     if self.take_gold:
-      return f"Action.Reserve({self.card_id}, D)"
-    return f"Action.Reserve({self.card_id})"
+      return f"Action.Reserve({self.card.id}, D)"
+    return f"Action.Reserve({self.card.id})"
 
   def _apply(self, player: PlayerState, state: GameState) -> GameState:
     # Mutable working copies
@@ -267,12 +266,11 @@ class ReserveCardAction(Action):
     player_gems = dict(player.gems)
     visible_cards = list(state.visible_cards)
 
-    card_id = getattr(self, 'card_id')
     take_gold = getattr(self, 'take_gold', True)
     # find card in visible_cards
     found = None
     for i, c in enumerate(visible_cards):
-      if getattr(c, 'id', None) == card_id:
+      if c.id == self.card.id:
         found = visible_cards.pop(i)
         break
     if found is None:
@@ -298,7 +296,7 @@ class ReserveCardAction(Action):
   def _check(self, player: PlayerState, state: GameState) -> bool:
     if not player.can_reserve():
       return False
-    if state.visible_cards.get(self.card_id) is None:
+    if state.visible_cards.get(self.card.id) is None:
       return False
     if self.take_gold and state.bank.get(Gem.GOLD) <= 0:
       return False

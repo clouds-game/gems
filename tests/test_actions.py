@@ -9,6 +9,7 @@ from gems.actions import (
 from gems.typings import (
   ActionType,
   Gem,
+  Card,
 )
 
 
@@ -34,15 +35,18 @@ def test_action_constructors_basic():
   assert a2.count == 2
   assert str(a2) == "Action.Take2(W)"
 
-  a3 = Action.buy('card-1', payment={Gem.BLACK: 1, Gem.GOLD: 1})
+  card1 = Card(id='card-1', level=1, cost_in={Gem.BLACK: 1})
+  a3 = Action.buy(card1, payment={Gem.BLACK: 1, Gem.GREEN: 1})
   assert isinstance(a3, Action)
   assert isinstance(a3, BuyCardAction)
   assert a3.type == ActionType.BUY_CARD
-  assert a3.card_id == 'card-1'
+  assert a3.card is card1
+  assert a3.card.id == 'card-1'
   assert any(g == Gem.BLACK for g, _ in a3.payment)
-  assert str(a3) == "Action.Buy(card-1, K1D1)"
+  assert str(a3) == "Action.Buy(card-1, K1G1)"
 
-  a4 = Action.reserve('card-2', take_gold=True)
+  card2 = Card(id='card-2', level=1)
+  a4 = Action.reserve(card2, take_gold=True)
   assert isinstance(a4, Action)
   assert isinstance(a4, ReserveCardAction)
   assert a4.type == ActionType.RESERVE_CARD

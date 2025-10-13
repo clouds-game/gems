@@ -154,12 +154,12 @@ class PlayerState:
 
       payments = player.can_afford(card)
       for payment in payments:
-        actions.append(BuyCardAction.create(card.id, payment=payment))
+        actions.append(BuyCardAction.create(card, payment=payment))
 
     if self.can_reserve():
       for card in state.visible_cards:
         take_gold = gold_in_bank > 0
-        actions.append(ReserveCardAction.create(card.id, take_gold=take_gold))
+        actions.append(ReserveCardAction.create(card, take_gold=take_gold))
 
     if not actions:
       return [Action.noop()]
