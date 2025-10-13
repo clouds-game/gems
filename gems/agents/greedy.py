@@ -24,16 +24,18 @@ def quick_score(state: GameState, seat_id: int, action: Action) -> float:
   if isinstance(action, Take3Action):
     get_num = len(action.gems)
     drop_num = len(player.gems) + get_num - 10
+    drop_num = max(drop_num, 0)
     return (get_num - drop_num) * 10
   elif isinstance(action, Take2Action):
     get_num = action.count
     drop_num = len(player.gems) + get_num - 10
+    drop_num = max(drop_num, 0)
     return (get_num - drop_num) * 10
   elif isinstance(action, BuyCardAction):
     card = action.card
-    score = (card.points + 1) * 20 + (5 if card.bonus is not None else 0)
-    payment_cost = sum([n / player.gems.get(g) for g, n in action.payment if g !=
-                       Gem.GOLD and player.gems.get(g) >= n]) + action.payment.get(Gem.GOLD)
+    score = (card.points + 1) * 50 + (5 if card.bonus is not None else 0)
+    payment_cost = action.payment.get(Gem.GOLD) * 2 + \
+        sum(action.payment.get(g) for g in Gem if g != Gem.GOLD)
     return float(score) - float(payment_cost)
   elif isinstance(action, ReserveCardAction):
     if action.take_gold:

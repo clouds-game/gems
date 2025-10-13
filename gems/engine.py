@@ -19,6 +19,8 @@ from pathlib import Path
 import random
 
 BaseAgent = TypeVar('BaseAgent', bound=Agent)
+
+
 class Engine:
   """A tiny, stateful wrapper around the engine helpers.
 
@@ -55,6 +57,7 @@ class Engine:
     self._state = GameState(players=self._state.players, bank=self._state.bank,
                             visible_cards_in=visible, turn=self._state.turn)
     self._all_noops_last_round = False
+    self._action_history: List[Action] = []
 
   @staticmethod
   def create_game(num_players: int = 2, names: Optional[List[str]] = None) -> GameState:
@@ -205,6 +208,7 @@ class Engine:
         print(f"Turn {state.turn} — player {seat} performs: {action}")
       # apply action and update engine state
       self._state = action.apply(state)
+      self._action_history.append(action)
       # print a brief summary after the move
       if debug:
         self.print_summary()
