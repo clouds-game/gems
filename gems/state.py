@@ -148,15 +148,18 @@ class GameState:
   # bank is represented as an immutable tuple of (resource, amount).
   bank_in: InitVar[Iterable[tuple[Gem, int]] | Mapping[Gem, int] | GemList | None] = None
   bank: GemList = field(default_factory=GemList)
+  visible_cards_in: InitVar[Iterable[Card] | CardList | None] = None
   visible_cards: CardList = field(default_factory=CardList)
   turn: int = 0
   last_action: Optional["Action"] = None
 
-  def __post_init__(self, bank_in):
+  def __post_init__(self, bank_in, visible_cards_in):
     # normalize inputs into tuples where appropriate so the public
     # API is always immutable. Allow callers to provide dicts or
     # iterables; we try to be forgiving.
     if bank_in is not None:
       object.__setattr__(self, 'bank', GemList(_to_kv_tuple(bank_in)))
+    if visible_cards_in is not None:
+      object.__setattr__(self, 'visible_cards', CardList(visible_cards_in))
     object.__setattr__(self, 'players', tuple(self.players))
     object.__setattr__(self, 'visible_cards', CardList(self.visible_cards))

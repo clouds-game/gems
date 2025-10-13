@@ -51,7 +51,7 @@ class Engine:
       self.visible_roles.append(self.roles_deck.pop())
     # update GameState.visible_cards to include the visible cards
     self._state = GameState(players=self._state.players, bank=self._state.bank,
-                            visible_cards=tuple(visible), turn=self._state.turn)
+                            visible_cards_in=visible, turn=self._state.turn)
 
   @staticmethod
   def create_game(num_players: int = 2, names: Optional[List[str]] = None) -> GameState:
@@ -82,7 +82,7 @@ class Engine:
 
     visible_cards = tuple()
 
-    return GameState(players=tuple(players), bank_in=bank, visible_cards=visible_cards, turn=0)
+    return GameState(players=tuple(players), bank_in=bank, visible_cards_in=visible_cards, turn=0)
 
   def reset(self, num_players: Optional[int] = None, names: Optional[List[str]] = None) -> None:
     """Reset the engine's internal GameState.
