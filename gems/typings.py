@@ -94,9 +94,8 @@ class Card:
   # Accept iterator/mapping inputs at construction time; store immutable
   # tuple-backed attributes for consumers.
   cost_in: InitVar[Union[Iterable[Tuple[Gem, int]], Mapping[Gem, int]]] = ()
-  metadata_in: InitVar[Union[Iterable[Tuple[str, Any]], Mapping[str, Any]]] = ()
   cost: GemList = field(init=False, default_factory=GemList)
-  face_up: bool = True
+  metadata_in: InitVar[Union[Iterable[Tuple[str, Any]], Mapping[str, Any]]] = ()
   metadata: Tuple[Tuple[str, Any], ...] = field(init=False, default_factory=tuple)
 
   def __post_init__(self, cost_in, metadata_in):
@@ -113,7 +112,6 @@ class Card:
         'points': self.points,
         'bonus': self.bonus.value if self.bonus is not None else None,
         'cost': [(g.value, n) for g, n in self.cost],
-        'face_up': self.face_up,
         'metadata': list(self.metadata),
     }
 
@@ -124,13 +122,46 @@ class Card:
     metadata = tuple(d.get('metadata', ()))
     return cls(id=d.get('id'), name=d.get('name'), level=d.get('level', 1),
                points=d.get('points', 0), bonus=bonus, cost_in=cost,
-               face_up=d.get('face_up', True), metadata_in=metadata)
+               metadata_in=metadata)
 
   def __str__(self) -> str:  # pragma: no cover - tiny convenience
     bonus = self.bonus.short_str() if self.bonus else "N"
     points = f"{self.points}" if self.points > 0 else ""
     costs = "".join(f"{g.short_str()}{n}" for g, n in self.cost)
     return f"Card([{self.level}]{bonus}{points}:{costs})"
+
+
+@dataclass(frozen=True)
+class CardList:
+  """Immutable list-like wrapper for a sequence of Card objects.
+
+  Minimal helper used to represent visible/reserved/purchased card lists
+  in the public API. Mirrors the shape of `GemList` but for `Card`.
+  """
+  _items: Tuple['Card', ...] = field(default_factory=tuple)
+
+  def __init__(self, vals: Iterable['Card'] = ()):  # pragma: no cover - simple wrapper
+    items = tuple(vals)
+    object.__setattr__(self, '_items', items)
+
+  def __iter__(self):
+    return iter(self._items)
+
+  def __len__(self) -> int:
+    return len(self._items)
+
+  def __getitem__(self, i):
+    return self._items[i]
+
+  def as_tuple(self) -> Tuple['Card', ...]:
+    return self._items
+
+  def to_list(self) -> list:
+    return list(self._items)
+
+  def __repr__(self) -> str:  # pragma: no cover - convenience
+    return f"CardList({self._items!r})"
+
 
 @dataclass(frozen=True)
 class Role:

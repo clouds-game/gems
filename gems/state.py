@@ -1,7 +1,7 @@
 from dataclasses import InitVar, dataclass, field
 from typing import Iterable, Mapping, Optional, List, Dict, TYPE_CHECKING
 
-from .typings import Gem, GemList, Card
+from .typings import Gem, GemList, Card, CardList
 from .utils import _to_kv_tuple
 
 if TYPE_CHECKING:
@@ -22,17 +22,17 @@ class PlayerState:
   gems: GemList = field(default_factory=GemList)
   score: int = 0
   reserved_cards_in: InitVar[Iterable[Card]] = ()
-  reserved_cards: tuple[Card, ...] = field(init=False, default_factory=tuple)
+  reserved_cards: CardList = field(init=False, default_factory=CardList)
   purchased_cards_in: InitVar[Iterable[Card]] = ()
-  purchased_cards: tuple[Card, ...] = field(init=False, default_factory=tuple)
+  purchased_cards: CardList = field(init=False, default_factory=CardList)
   discounts: GemList = field(init=False, default_factory=GemList)
 
   def __post_init__(self, gems_in, reserved_cards_in, purchased_cards_in):
     if gems_in is not None:
       object.__setattr__(self, 'gems', GemList(_to_kv_tuple(gems_in) if not isinstance(gems_in, GemList) else gems_in))
-    object.__setattr__(self, 'reserved_cards', tuple(reserved_cards_in))
+    object.__setattr__(self, 'reserved_cards', CardList(tuple(reserved_cards_in)))
     purchased = tuple(purchased_cards_in)
-    object.__setattr__(self, 'purchased_cards', purchased)
+    object.__setattr__(self, 'purchased_cards', CardList(purchased))
 
     counts: dict = {}
     for c in purchased:
@@ -148,7 +148,7 @@ class GameState:
   # bank is represented as an immutable tuple of (resource, amount).
   bank_in: InitVar[Iterable[tuple[Gem, int]] | Mapping[Gem, int] | GemList | None] = None
   bank: GemList = field(default_factory=GemList)
-  visible_cards: tuple[Card, ...] = field(default_factory=tuple)
+  visible_cards: CardList = field(default_factory=CardList)
   turn: int = 0
   last_action: Optional["Action"] = None
 
@@ -159,4 +159,4 @@ class GameState:
     if bank_in is not None:
       object.__setattr__(self, 'bank', GemList(_to_kv_tuple(bank_in)))
     object.__setattr__(self, 'players', tuple(self.players))
-    object.__setattr__(self, 'visible_cards', tuple(self.visible_cards))
+    object.__setattr__(self, 'visible_cards', CardList(self.visible_cards))
