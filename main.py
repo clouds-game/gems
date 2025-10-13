@@ -5,13 +5,16 @@ This creates a minimal, valid GameState using the datatypes in
 """
 
 from gems.engine import Engine
+from gems.agents.random import RandomAgent
 import random
 
 
 if __name__ == "__main__":
   # initialize a 3-player game and run a short random-play simulation
   engine = Engine(num_players=3, names=["Alice", "Bob", "Cara"])
-  rng = random.Random()
+  # create one RandomAgent per seat and seed deterministically for reproducibility
+  rng = random.Random(0)
+  agents = [RandomAgent(seat_id=i, rng=random.Random(100 + i)) for i in range(3)]
 
   print("Initialized game state:\n")
   engine.print_summary()
@@ -35,9 +38,10 @@ if __name__ == "__main__":
       print(f"No legal actions available for player {seat}. Ending game.")
       break
 
-    action = rng.choice(actions)
-    print(f"Turn {state.turn} — player {seat} performs: {action}")
-    # apply action and update engine state
+    agent = agents[seat]
+    action = agent.act(state, actions)
+    print(f"Turn {state.turn} — player {seat} ({state.players[seat].name}) performs: {action}")
+    # apply action and update engine state via Action.apply
     engine._state = action.apply(state)
     engine.advance_turn()
     # print a brief summary after the move
