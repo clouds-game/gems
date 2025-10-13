@@ -127,3 +127,18 @@ def test_buy_card_legal_if_affordable_by_exact_payment():
 
   actions = e.get_legal_actions(seat_id=0)
   assert any(a.type == ActionType.BUY_CARD for a in actions)
+
+
+def test_player_can_buy_own_reserved_card():
+  # Player reserves a card and then should be able to buy it if they can afford it
+  e = Engine(2)
+  card = Card(id='res-1', cost_in=[(Gem.BLACK, 1)])
+  # player 0 has the exact gem to buy the reserved card
+  p0 = PlayerState(seat_id=0, gems=GemList(((Gem.BLACK, 1),)), reserved_cards_in=(card,))
+  p1 = PlayerState(seat_id=1, gems=GemList(()))
+  state = GameState(players=(p0, p1), bank=e.get_state().bank, visible_cards_in=(), turn=0)
+  e._state = state
+
+  actions = e.get_legal_actions(seat_id=0)
+  # ensure buying own reserved card is exposed as a legal action
+  assert any(a.type == ActionType.BUY_CARD for a in actions)

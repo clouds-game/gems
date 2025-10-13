@@ -176,6 +176,24 @@ class CardList:
         return c
     return None
 
+  def merge(self, *others: Iterable['Card']) -> 'CardList':
+    """Return a new CardList combining this CardList with other iterables of Card.
+
+    Each element in `others` may be a `CardList` or any iterable of `Card`.
+    The original CardList instances are not mutated.
+    """
+    items = list(self._items)
+    for o in others:
+      if isinstance(o, CardList):
+        items.extend(o._items)
+      else:
+        items.extend(tuple(o))
+    return CardList(items)
+
+  def __add__(self, other: Iterable['Card']) -> 'CardList':
+    """Support `CardList + other` to produce a new merged CardList."""
+    return self.merge(other)
+
 
 @dataclass(frozen=True)
 class Role:

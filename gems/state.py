@@ -147,7 +147,8 @@ class PlayerState:
         actions.append(Take2Action.create(g, 2))
 
     gold_in_bank = bank.get(Gem.GOLD, 0)
-    for card in state.visible_cards:
+    visible_cards = state.visible_cards + self.reserved_cards
+    for card in visible_cards:
       card_id = getattr(card, 'id', None)
       if card_id is None:
         continue
