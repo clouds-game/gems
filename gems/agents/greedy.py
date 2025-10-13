@@ -3,10 +3,12 @@
 GreedyAgent uses quick_score to evaluate legal actions and picks the best.
 """
 
-from typing import Sequence, Any, Optional
+from typing import Literal, Sequence, Any, Optional
+
+from gems.typings import Gem
 
 from .core import Agent
-from ..actions import Action
+from ..actions import Action, NoopAction, Take3Action, Take2Action, BuyCardAction, ReserveCardAction
 from ..state import GameState
 
 
@@ -17,6 +19,29 @@ def quick_score(state: GameState, seat_id: int, action: Action) -> float:
   repository-specific heuristic can replace or extend this function.
   """
   # TODO: implement a domain-specific heuristic using engine accessors
+  player = state.players[seat_id]
+
+  if isinstance(action, Take3Action):
+    get_num = len(action.gems)
+    drop_num = len(player.gems) + get_num - 10
+    return (get_num - drop_num) * 10
+  elif isinstance(action, Take2Action):
+    get_num = action.count
+    drop_num = len(player.gems) + get_num - 10
+    return (get_num - drop_num) * 10
+  elif isinstance(action, BuyCardAction):
+    card = action.card
+    score = (card.points + 1) * 20 + (5 if card.bonus is not None else 0)
+    payment_cost = sum([n / player.gems.get(g) for g, n in action.payment if g !=
+                       Gem.GOLD and player.gems.get(g) >= n]) + action.payment.get(Gem.GOLD)
+    return float(score) - float(payment_cost)
+  elif isinstance(action, ReserveCardAction):
+    if action.take_gold:
+      return 15
+    else:
+      return -1
+  elif isinstance(action, NoopAction):
+    return -100.0
   return 0.0
 
 
