@@ -1,7 +1,9 @@
 import pytest
 from gems import Engine
+from gems.actions import Action, Take2Action
 from gems.typings import ActionType, Gem, Card, GemList
 from gems.state import PlayerState, GameState
+
 
 def test_get_legal_actions_basic():
   e = Engine.new(2)
@@ -72,13 +74,15 @@ def test_gold_allows_multiple_payment_combinations():
   actions = e.get_legal_actions(seat_id=0)
   assert any(a.type == ActionType.BUY_CARD for a in actions)
 
+
 def test_no_legal_actions_fallbacks_to_noop():
   e = Engine.new(2)
   # construct a minimal state with no visible cards and players without gems
   p0 = PlayerState(seat_id=0, gems=GemList(()))
   p1 = PlayerState(seat_id=1, gems=GemList(()))
   # create a bank with zero tokens for all gem types so no take/buy/reserve
-  zero_bank = GemList(((Gem.RED, 0), (Gem.BLUE, 0), (Gem.WHITE, 0), (Gem.BLACK, 0), (Gem.GREEN, 0), (Gem.GOLD, 0)))
+  zero_bank = GemList(((Gem.RED, 0), (Gem.BLUE, 0), (Gem.WHITE, 0),
+                      (Gem.BLACK, 0), (Gem.GREEN, 0), (Gem.GOLD, 0)))
   state = GameState(players=(p0, p1), bank=zero_bank, visible_cards_in=(), turn=0)
   e._state = state
 
@@ -190,7 +194,8 @@ def test_take3_no_return_needed_enumerates_combos():
   p0 = PlayerState(seat_id=0, gems=GemList(()))
   p1 = PlayerState(seat_id=1, gems=GemList(()))
   # create a bank with 5 colored gems available
-  bank = GemList(((Gem.RED, 1), (Gem.BLUE, 1), (Gem.WHITE, 1), (Gem.BLACK, 1), (Gem.GREEN, 1), (Gem.GOLD, 5)))
+  bank = GemList(((Gem.RED, 1), (Gem.BLUE, 1), (Gem.WHITE, 1),
+                 (Gem.BLACK, 1), (Gem.GREEN, 1), (Gem.GOLD, 5)))
   state = GameState(players=(p0, p1), bank=bank, visible_cards_in=(), turn=0)
   e._state = state
 
@@ -236,5 +241,73 @@ def test_take3_returns_within_player_holdings():
     if getattr(a, 'ret', None):
       for g, amt in getattr(a, 'ret'):
         # player originally had this many of g
+        orig = dict(p0.gems).get(g, 0)
+        assert amt <= orig
+
+
+def test_take2_no_return_needed_enumerates_combos():
+  # if player has room, Take2 should enumerate available take-2 actions without returns
+  e = Engine.new(2)
+  p0 = PlayerState(seat_id=0, gems=GemList(()))
+  p1 = PlayerState(seat_id=1, gems=GemList(()))
+  # create a bank with at least 4 of two colors
+  bank = GemList(((Gem.RED, 4), (Gem.BLUE, 4), (Gem.WHITE, 1),
+                 (Gem.BLACK, 1), (Gem.GREEN, 1), (Gem.GOLD, 5)))
+  state = GameState(players=(p0, p1), bank=bank, visible_cards_in=(), turn=0)
+  e._state = state
+
+  actions = e.get_legal_actions(seat_id=0)
+  take2 = [a for a in actions if a.type == ActionType.TAKE_2_SAME]
+  # expect to find at least two take-2 actions for red and blue
+  gems_taken = {a.gem for a in take2}  # type: ignore
+  assert Gem.RED in gems_taken and Gem.BLUE in gems_taken
+  # none should include a return payload
+  assert all((not getattr(a, 'ret', None)) for a in take2)
+
+
+def test_take2_required_returns_enumerated_and_apply():
+  # player with many tokens must return when taking 2
+  e = Engine.new(2)
+  # player has 9 gems: 5 red, 4 blue
+  p0 = PlayerState(seat_id=0, gems=GemList(((Gem.RED, 5), (Gem.BLUE, 4))))
+  p1 = PlayerState(seat_id=1, gems=GemList(()))
+  # bank has at least 4 of white so take2 on white is available
+  bank = GemList(((Gem.WHITE, 4), (Gem.GOLD, 5)))
+  state = GameState(players=(p0, p1), bank=bank, visible_cards_in=(), turn=0)
+  e._state = state
+
+  actions = e.get_legal_actions(seat_id=0)
+  take2 = [a for a in actions if a.type == ActionType.TAKE_2_SAME]
+  # Expect at least one take2 action that includes a return payload
+  has_returns = all(getattr(a, 'ret', None) for a in take2)
+  assert has_returns
+  # pick one with returns and apply it
+  chosen = next(a for a in take2 if getattr(a, 'ret', None))
+  assert isinstance(chosen, Take2Action)
+  total_before = sum(n for _, n in p0.gems)
+  need = max(0, total_before + 2 - 10)
+  assert chosen.ret is not None
+  assert sum(chosen.ret.to_dict().values()) == need
+  new_state = chosen.apply(state)
+  new_p0 = new_state.players[0]
+  assert sum(n for _, n in new_p0.gems) == 10
+
+
+def test_take2_returns_within_player_holdings():
+  e = Engine.new(2)
+  # player has 8 gems: 5 red, 3 blue (needs 0 or maybe returns depending on take)
+  p0 = PlayerState(seat_id=0, gems=GemList(((Gem.RED, 5), (Gem.BLUE, 5))))
+  p1 = PlayerState(seat_id=1, gems=GemList(()))
+  bank = GemList(((Gem.WHITE, 4), (Gem.GREEN, 4), (Gem.GOLD, 5)))
+  state = GameState(players=(p0, p1), bank=bank, visible_cards_in=(), turn=0)
+  e._state = state
+
+  actions = e.get_legal_actions(seat_id=0)
+  take2 = [a for a in actions if a.type == ActionType.TAKE_2_SAME]
+  assert len(take2) == 2 * 3
+  assert all(getattr(a, 'ret', None) for a in take2)
+  for a in take2:
+    if getattr(a, 'ret', None):
+      for g, amt in getattr(a, 'ret'):
         orig = dict(p0.gems).get(g, 0)
         assert amt <= orig
