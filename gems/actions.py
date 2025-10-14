@@ -19,12 +19,12 @@ class Action(ABC):
   type: ActionType
 
   @classmethod
-  def take3(cls, *gems: Gem) -> 'Take3Action':
-    return Take3Action.create(*gems)
+  def take3(cls, *gems: Gem, ret_map: Optional[Mapping[Gem, int]] = None) -> 'Take3Action':
+    return Take3Action.create(*gems, ret_map=ret_map)
 
   @classmethod
-  def take2(cls, gem: Gem, count: int = 2) -> 'Take2Action':
-    return Take2Action.create(gem, count)
+  def take2(cls, gem: Gem, count: int = 2, ret_map: Optional[Mapping[Gem, int]] = None) -> 'Take2Action':
+    return Take2Action.create(gem, count, ret_map=ret_map)
 
   @classmethod
   def buy(cls, card: Card, payment: Optional[Mapping[Gem, int]] = None) -> 'BuyCardAction':
@@ -95,8 +95,7 @@ class Take3Action(Action):
   def __str__(self) -> str:
     gem_str = ''.join(g.color_circle() for g in self.gems)
     if self.ret:
-      ret_str = ''.join(f"{g.color_circle()}" * n for g, n in self.ret)
-      return f"Action.Take3({gem_str}-{ret_str})"
+      return f"Action.Take3({gem_str}-{self.ret})"
     return f"Action.Take3({gem_str})"
 
   def _apply(self, player: PlayerState, state: GameState) -> GameState:
@@ -198,10 +197,9 @@ class Take2Action(Action):
     return cls(type=ActionType.TAKE_2_SAME, gem=gem, count=count, ret=ret)
 
   def __str__(self) -> str:
-    base = f"Action.Take2({self.gem.color_circle()}*{self.count})"
+    base = f"Action.Take2({self.count}{self.gem.color_circle()})"
     if self.ret:
-      ret_str = ''.join(f"{g.color_circle()}" * n for g, n in self.ret)
-      return base[:-1] + f"-{ret_str})"
+      return base[:-1] + f"-{self.ret})"
     return base
 
   def _apply(self, player: PlayerState, state: GameState) -> GameState:

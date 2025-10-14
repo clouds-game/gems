@@ -52,3 +52,22 @@ def test_action_constructors_basic():
   assert a4.type == ActionType.RESERVE_CARD
   assert a4.take_gold is True
   assert str(a4) == "Action.Reserve(<card-2>, 🟡)"
+
+  a5 = Action.take3(Gem.RED, Gem.BLUE, Gem.GREEN, ret_map = {Gem.WHITE: 2})
+  assert isinstance(a5, Action)
+  assert isinstance(a5, Take3Action)
+  assert a5.type == ActionType.TAKE_3_DIFFERENT
+  assert a5.gems == (Gem.RED, Gem.BLUE, Gem.GREEN)
+  assert a5.ret is not None
+  assert a5.ret.to_dict() == {Gem.WHITE: 2}
+  assert str(a5) == "Action.Take3(🔴🔵🟢-2⚪)"
+
+  a6 = Action.take2(Gem.WHITE, ret_map= {Gem.RED: 1})
+  assert isinstance(a6, Action)
+  assert isinstance(a6, Take2Action)
+  assert a6.type == ActionType.TAKE_2_SAME
+  assert a6.gem == Gem.WHITE
+  assert a6.count == 2
+  assert a6.ret is not None
+  assert a6.ret.to_dict() == {Gem.RED: 1}
+  assert str(a6) == "Action.Take2(2⚪-1🔴)"
