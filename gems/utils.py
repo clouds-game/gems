@@ -1,8 +1,9 @@
-from typing import Iterable, TypeVar, Tuple
+from typing import TypeVar
+from collections.abc import Sequence
 
 T = TypeVar('T')
 
-def _to_kv_tuple(v: Iterable):
+def _to_kv_tuple(v: Sequence):
   """Normalize a dict or iterable of pairs into a stable tuple of pairs.
 
   Kept as a small utility to be shared by typing and state helpers.
@@ -17,7 +18,7 @@ def _to_kv_tuple(v: Iterable):
   return tuple(v)
 
 
-def _replace_tuple(v: Tuple[T, ...], i: int, d: T) -> Tuple[T, ...]:
+def _replace_tuple(v: tuple[T, ...], i: int, d: T) -> tuple[T, ...]:
   """Return a new tuple where index `i` is replaced with `d`.
 
   This helper keeps code that needs to update a single element of an

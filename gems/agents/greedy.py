@@ -3,7 +3,7 @@
 GreedyAgent uses quick_score to evaluate legal actions and picks the best.
 """
 
-from typing import Literal, Sequence, Any, Optional
+from collections.abc import Sequence
 
 from gems.typings import Gem
 
@@ -48,7 +48,7 @@ def quick_score(state: GameState, seat_id: int, action: Action) -> float:
 
 
 class GreedyAgent(Agent):
-  def act(self, state: GameState, legal_actions: Sequence[Action], *, timeout: Optional[float] = None) -> Action:
+  def act(self, state: GameState, legal_actions: Sequence[Action], *, timeout: float | None = None) -> Action:
     if not legal_actions:
       raise ValueError("No legal actions available")
     best = None

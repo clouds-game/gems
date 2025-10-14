@@ -8,7 +8,8 @@ development in the repository root so callers have a stable, package-level
 entrypoint.
 """
 
-from typing import List, Optional, Dict, Sequence, TypeVar
+from typing import TypeVar
+from collections.abc import Sequence
 
 from .agents.core import Agent
 from .consts import CARD_LEVELS, COIN_DEFAULT_INIT, COIN_GOLD_INIT, DEFAULT_PLAYERS, CARD_VISIBLE_COUNT
@@ -36,21 +37,20 @@ class Engine:
 
   _num_players: int
   _state: GameState
-  decks_by_level: Dict[int, List[Card]]
-  roles_deck: List[Role]
+  decks_by_level: dict[int, list[Card]]
+  roles_deck: list[Role]
   _rng: random.Random
-
   def __init__(
       self,
       *,
       num_players: int,
-      names: Optional[List[str]],
+      names: list[str] | None,
       state: GameState,
-      decks_by_level: Dict[int, List[Card]],
-      roles_deck: List[Role],
+      decks_by_level: dict[int, list[Card]],
+      roles_deck: list[Role],
       rng: random.Random,
       all_noops_last_round: bool = False,
-      action_history: Optional[Sequence[Action]] = None,
+      action_history: list[Action] | None = None,
   ) -> None:
     self._num_players = num_players
     self._names = names
@@ -62,7 +62,7 @@ class Engine:
     self._action_history = list(action_history) if action_history is not None else []
 
   @staticmethod
-  def new(num_players: int = DEFAULT_PLAYERS, names: Optional[List[str]] = None, seed: Optional[int] = None) -> "Engine":
+  def new(num_players: int = DEFAULT_PLAYERS, names: list[str] | None = None, seed: int | None = None) -> "Engine":
     if not (1 <= num_players <= 4):
       raise ValueError("num_players must be between 1 and 4")
     state = Engine.create_game(num_players, names)
@@ -75,7 +75,7 @@ class Engine:
         rng=random.Random(),
     )
     engine.load_and_shuffle_assets(seed=seed)
-    visible_cards = []
+    visible_cards: list[Card] = []
     for lvl in CARD_LEVELS:
       drawn = engine.draw_from_deck(lvl, CARD_VISIBLE_COUNT)
       visible_cards.extend(reversed(drawn))
@@ -104,7 +104,7 @@ class Engine:
     return engine
 
   @staticmethod
-  def create_game(num_players: int = DEFAULT_PLAYERS, names: Optional[List[str]] = None) -> GameState:
+  def create_game(num_players: int = DEFAULT_PLAYERS, names: list[str] | None = None) -> GameState:
     """Create and return a minimal starting GameState.
 
     - num_players: between 2 and 4 (inclusive).
@@ -135,7 +135,7 @@ class Engine:
 
     return GameState(players=tuple(players), bank_in=bank, visible_cards_in=visible_cards, turn=0)
 
-  def reset(self, num_players: Optional[int] = None, names: Optional[List[str]] = None) -> None:
+  def reset(self, num_players: int | None = None, names: list[str] | None = None) -> None:
     """Reset the engine's internal GameState.
 
     If `num_players` or `names` are omitted the values provided at
@@ -168,7 +168,7 @@ class Engine:
     cards_table = ["%3d" % len(self.decks_by_level.get(lvl, ())) + "\t".join(["  {:25}".format(str(c)) for c in self._state.visible_cards.get_level(lvl)]) for lvl in CARD_LEVELS]
     print(f"Visible cards:\n{'\n'.join([line for line in cards_table if line.strip() != '0'])}")
 
-  def load_and_shuffle_assets(self, path: Optional[str] = None, seed: Optional[int] = None) -> None:
+  def load_and_shuffle_assets(self, path: str | None = None, seed: int | None = None) -> None:
     """Load assets from disk and shuffle them into decks on this Engine.
 
     - path: optional path to config file (falls back to package assets)
@@ -183,32 +183,32 @@ class Engine:
     # keep RNG for reproducibility if callers want to do more shuffling
     self._rng = rng
 
-  def get_deck(self, level: int) -> List[Card]:
+  def get_deck(self, level: int) -> list[Card]:
     return list(self.decks_by_level.get(level, []))
 
-  def get_roles(self) -> List[Role]:
+  def get_roles(self) -> list[Role]:
     return list(self.roles_deck)
 
-  def draw_from_deck(self, level: int, n: int = 1) -> List[Card]:
+  def draw_from_deck(self, level: int, n: int = 1) -> list[Card]:
     """Remove and return up to `n` cards from the deck of `level`.
 
     Pops from the end of the level list (treating the end as the top of the
     deck) which is efficient for Python lists.
     """
     deck = self.decks_by_level.get(level, [])
-    drawn: List[Card] = []
+    drawn: list[Card] = []
     for _ in range(min(n, len(deck))):
       drawn.append(deck.pop())
     return drawn
 
-  def peek_deck(self, level: int, n: int = 1) -> List[Card]:
+  def peek_deck(self, level: int, n: int = 1) -> list[Card]:
     """Return up to `n` cards from the top of the deck without removing them."""
     deck = self.decks_by_level.get(level, [])
     if not deck:
       return []
     return list(deck[-n:]) if n > 0 else []
 
-  def get_legal_actions(self, seat_id: Optional[int] = None) -> List[Action]:
+  def get_legal_actions(self, seat_id: int | None = None) -> list[Action]:
     """Return a list of legal `Action` objects for the given player seat.
 
     This is a lightweight implementation used by tests and agents to
@@ -236,7 +236,7 @@ class Engine:
     """
     self._state = self._state.advance_turn(self.decks_by_level)
 
-  def play_one_round(self, agents: List[BaseAgent], debug=True) -> None:
+  def play_one_round(self, agents: list[BaseAgent], debug=True) -> None:
     """Play a full round (one turn per player) using specific Agents.
 
     This is a convenience for quick simulations and testing. It does not
@@ -270,12 +270,12 @@ class Engine:
     winners = self.game_winners()
     return len(winners) > 0
 
-  def game_winners(self) -> List[PlayerState]:
+  def game_winners(self) -> list[PlayerState]:
     """Return a list of players who have reached the winning score (15 points)."""
     return [p for p in self._state.players if p.score >= 15]
 
 
-def load_assets(path: Optional[str] = None):
+def load_assets(path: str | None = None):
   """Load cards and roles from a JSON config file and return (cards, roles).
 
   The config file is expected to contain top-level `cards` and `roles` arrays
@@ -291,7 +291,7 @@ def load_assets(path: Optional[str] = None):
   return cards, roles
 
 
-def shuffle_assets(cards: Sequence[Card], roles: Sequence[Role], rng: Optional[random.Random] = None):
+def shuffle_assets(cards: Sequence[Card], roles: Sequence[Role], rng: random.Random | None = None):
   """Shuffle cards by level and shuffle roles.
 
   Returns a dict mapping level->list[Card] and a list of roles. The RNG may
@@ -299,7 +299,7 @@ def shuffle_assets(cards: Sequence[Card], roles: Sequence[Role], rng: Optional[r
   """
   rng = rng or random.Random()
   # group cards by level
-  levels: Dict[int, List[Card]] = {}
+  levels: dict[int, list[Card]] = {}
   for c in cards:
     levels.setdefault(c.level, []).append(c)
 

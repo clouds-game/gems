@@ -1,22 +1,22 @@
 from dataclasses import InitVar, dataclass, field
-from typing import Iterable, Mapping, Optional, List, Dict, TYPE_CHECKING
+from collections.abc import Iterable, Mapping
+from typing import TYPE_CHECKING
 
 from .consts import CARD_MAX_COUNT_RESERVED
 from .typings import Gem, GemList, Card, CardList, Role
-from .utils import _to_kv_tuple
 
 if TYPE_CHECKING:
   from .actions import Action
 
 
-def _apply_discounts(cost: Iterable[tuple["Gem", int]], discounts: "GemList") -> List[tuple["Gem", int]]:
+def _apply_discounts(cost: Iterable[tuple["Gem", int]], discounts: "GemList") -> list[tuple["Gem", int]]:
   """Return a list of (Gem, effective_amount) after applying discounts.
 
   Discounts are a GemList of (Gem, amt) pairs representing permanent
   bonuses from purchased cards. Effective amounts are floored at zero.
   """
-  discount_map: Dict["Gem", int] = {g: n for g, n in discounts}
-  effective: List[tuple["Gem", int]] = []
+  discount_map: dict["Gem", int] = {g: n for g, n in discounts}
+  effective: list[tuple["Gem", int]] = []
   for g, req in cost:
     disc = discount_map.get(g, 0)
     eff = req - disc
@@ -35,7 +35,7 @@ class PlayerState:
   ask a player about their options directly.
   """
   seat_id: int
-  name: Optional[str] = None
+  name: str | None = None
   gems_in: InitVar[Iterable[tuple[Gem, int]] | Mapping[Gem, int] | GemList | None] = None
   gems: GemList = field(default_factory=GemList)
   score: int = 0
@@ -47,8 +47,7 @@ class PlayerState:
 
   def __post_init__(self, gems_in, reserved_cards_in, purchased_cards_in):
     if gems_in is not None:
-      object.__setattr__(self, 'gems', GemList(_to_kv_tuple(
-          gems_in) if not isinstance(gems_in, GemList) else gems_in))
+      object.__setattr__(self, 'gems', GemList(gems_in))
     object.__setattr__(self, 'reserved_cards', CardList(tuple(reserved_cards_in)))
     purchased = tuple(purchased_cards_in)
     object.__setattr__(self, 'purchased_cards', CardList(purchased))
@@ -59,19 +58,19 @@ class PlayerState:
         counts[c.bonus] = counts.get(c.bonus, 0) + 1
     object.__setattr__(self, 'discounts', GemList(tuple(counts.items())))
 
-  def check_afford(self, card: Card, payment: Dict[Gem, int]) -> bool:
+  def check_afford(self, card: Card, payment: dict[Gem, int]) -> bool:
     """Check if the given payment dict is a valid way to afford the card."""
     # TODO: improve performance
     possible_payments = self.can_afford(card)
     return payment in possible_payments
 
-  def can_afford(self, card: Card) -> List[Dict[Gem, int]]:
+  def can_afford(self, card: Card) -> list[dict[Gem, int]]:
     """Return all exact payment dicts this player could use to buy `card`.
 
     Mirrors the previous `can_afford` helper but scoped to this player's
     available gems (`self.gems`).
     """
-    player_gems: Dict[Gem, int] = {g: amt for g, amt in self.gems}
+    player_gems: dict[Gem, int] = {g: amt for g, amt in self.gems}
     gold_available = player_gems.get(Gem.GOLD, 0)
 
     # Apply permanent discounts from purchased cards to the card cost
@@ -83,8 +82,8 @@ class PlayerState:
       return [{}]
 
     ranges = []
-    gems_order: List[Gem] = []
-    req_amounts: List[int] = []
+    gems_order: list[Gem] = []
+    req_amounts: list[int] = []
     for g, req in effective_requirements:
       gems_order.append(g)
       req_amounts.append(req)
@@ -94,14 +93,14 @@ class PlayerState:
 
     from itertools import product
 
-    payments: List[Dict[Gem, int]] = []
+    payments: list[dict[Gem, int]] = []
     for combo in product(*ranges):
       deficit = 0
       for spend, req in zip(combo, req_amounts):
         if spend < req:
           deficit += (req - spend)
       if deficit <= gold_available:
-        pay: Dict[Gem, int] = {}
+        pay: dict[Gem, int] = {}
         for g, spend in zip(gems_order, combo):
           if spend > 0:
             pay[g] = spend
@@ -115,7 +114,7 @@ class PlayerState:
     """Return whether this player can reserve another card."""
     return len(self.reserved_cards) < CARD_MAX_COUNT_RESERVED
 
-  def get_legal_actions(self, state: "GameState") -> List["Action"]:
+  def get_legal_actions(self, state: "GameState") -> list["Action"]:
     from .actions import (
         Action,
         Take3Action,
@@ -130,7 +129,7 @@ class PlayerState:
     logic is co-located with the action definitions. Falls back to a
     single NoopAction if no actions are available.
     """
-    actions: List[Action] = []
+    actions: list[Action] = []
     # Gather from each action type
     actions.extend(Take3Action._get_legal_actions(self, state))
     actions.extend(Take2Action._get_legal_actions(self, state))
@@ -155,18 +154,18 @@ class GameState:
   bank: GemList = field(default_factory=GemList)
   visible_cards_in: InitVar[Iterable[Card] | CardList | None] = None
   visible_cards: CardList = field(default_factory=CardList)
-  visible_roles_in: InitVar[Iterable[Role] | List[Role] | None] = None
+  visible_roles_in: InitVar[Iterable[Role] | list[Role] | None] = None
   visible_roles: tuple[Role, ...] = field(default_factory=tuple)
   turn: int = 0
   round: int = 0
-  last_action: Optional["Action"] = None
+  last_action: "Action | None" = None
 
   def __post_init__(self, bank_in, visible_cards_in, visible_roles_in):
     # normalize inputs into tuples where appropriate so the public
     # API is always immutable. Allow callers to provide dicts or
     # iterables; we try to be forgiving.
     if bank_in is not None:
-      object.__setattr__(self, 'bank', GemList(_to_kv_tuple(bank_in)))
+      object.__setattr__(self, 'bank', GemList(bank_in))
     if visible_cards_in is not None:
       object.__setattr__(self, 'visible_cards', CardList(visible_cards_in))
     if visible_roles_in is not None:
@@ -179,7 +178,7 @@ class GameState:
       raise ValueError("GameState must have at least one player")
     object.__setattr__(self, 'round', self.turn // num_players)
 
-  def advance_turn(self, decks_by_level: Optional[Dict[int, List[Card]]] = None, per_level: int = 4) -> 'GameState':
+  def advance_turn(self, decks_by_level: dict[int, list[Card]] | None = None, per_level: int = 4) -> 'GameState':
     """Return a new GameState with the turn advanced by one.
 
     If `decks_by_level` is provided (a mutable mapping level->list[Card])
@@ -194,7 +193,7 @@ class GameState:
 
     if decks_by_level is not None:
       # Count how many visible cards we currently have per level
-      counts: Dict[int, int] = {}
+      counts: dict[int, int] = {}
       for c in visible:
         lvl = c.level
         counts[lvl] = counts.get(lvl, 0) + 1

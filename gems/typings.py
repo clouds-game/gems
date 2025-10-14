@@ -1,6 +1,7 @@
 from dataclasses import MISSING, dataclass, field, InitVar
 from enum import Enum
-from typing import Any, Optional, Tuple, Iterable, Mapping, Union, Iterator
+from typing import Any
+from collections.abc import Iterable, Mapping, Iterator
 
 from .utils import _to_kv_tuple
 
@@ -48,20 +49,20 @@ class Gem(Enum):
 class GemList:
   """Immutable list-like wrapper for a sequence of (Gem, int) pairs.
 
-  Purpose: replace the frequent usage of Tuple[Tuple[Gem, int], ...].
+  Purpose: replace the frequent usage of tuple[tuple[Gem, int], ...].
 
   Construction accepts a tuple, dict, or any iterable of (Gem, int).
   Provides lightweight helpers to convert to/from dict and to iterate.
   """
   COLOR_ORDER = (Gem.BLUE, Gem.WHITE, Gem.BLACK, Gem.RED, Gem.GREEN, Gem.GOLD)
-  _pairs: Tuple[Tuple['Gem', int], ...] = field(default_factory=tuple)
+  _pairs: tuple[tuple['Gem', int], ...] = field(default_factory=tuple)
 
-  def __init__(self, vals: Union[Iterable[Tuple['Gem', int]], Mapping['Gem', int]] = ()):  # pragma: no cover - simple wrapper
+  def __init__(self, vals: Iterable[tuple['Gem', int]] | Mapping['Gem', int] = ()):  # pragma: no cover - simple wrapper
     # normalize via the existing helper
     pairs = _to_kv_tuple(vals)
     object.__setattr__(self, '_pairs', pairs)
 
-  def __iter__(self) -> Iterator[Tuple['Gem', int]]:
+  def __iter__(self) -> Iterator[tuple['Gem', int]]:
     return iter(self._pairs)
 
   def __len__(self) -> int:
@@ -82,7 +83,7 @@ class GemList:
   def to_dict(self) -> dict[Gem, int]:
     return {g: n for g, n in self._pairs}
 
-  def as_tuple(self) -> Tuple[Tuple['Gem', int], ...]:
+  def as_tuple(self) -> tuple[tuple['Gem', int], ...]:
     return self._pairs
 
   def __repr__(self) -> str:  # pragma: no cover - convenience
@@ -113,20 +114,20 @@ class Card:
   - `cost` is an immutable tuple of (Gem, amount) pairs.
   """
   id: str
-  name: Optional[str] = None
+  name: str | None = None
   level: int = 1
   points: int = 0
-  bonus: Optional[Gem] = None
+  bonus: Gem | None = None
   # Accept iterator/mapping inputs at construction time; store immutable
   # tuple-backed attributes for consumers.
-  cost_in: InitVar[Union[Iterable[Tuple[Gem, int]], Mapping[Gem, int]]] = ()
+  cost_in: InitVar[Iterable[tuple[Gem, int]] | Mapping[Gem, int]] = ()
   cost: GemList = field(init=False, default_factory=GemList)
-  metadata_in: InitVar[Union[Iterable[Tuple[str, Any]], Mapping[str, Any]]] = ()
-  metadata: Tuple[Tuple[str, Any], ...] = field(init=False, default_factory=tuple)
+  metadata_in: InitVar[Iterable[tuple[str, Any]] | Mapping[str, Any]] = ()
+  metadata: tuple[tuple[str, Any], ...] = field(init=False, default_factory=tuple)
 
   def __post_init__(self, cost_in, metadata_in):
     # normalize cost and metadata into tuples so Card is always immutable
-    object.__setattr__(self, 'cost', GemList(_to_kv_tuple(cost_in)))
+    object.__setattr__(self, 'cost', GemList(cost_in))
     object.__setattr__(self, 'metadata', _to_kv_tuple(metadata_in))
 
   def to_dict(self) -> dict:
@@ -167,7 +168,7 @@ class CardList:
   Minimal helper used to represent visible/reserved/purchased card lists
   in the public API. Mirrors the shape of `GemList` but for `Card`.
   """
-  _items: Tuple['Card', ...] = field(default_factory=tuple)
+  _items: tuple['Card', ...] = field(default_factory=tuple)
 
   def __init__(self, vals: Iterable['Card'] = ()):  # pragma: no cover - simple wrapper
     items = tuple(vals)
@@ -182,7 +183,7 @@ class CardList:
   def __getitem__(self, i):
     return self._items[i]
 
-  def as_tuple(self) -> Tuple['Card', ...]:
+  def as_tuple(self) -> tuple['Card', ...]:
     return self._items
 
   def to_list(self) -> list:
@@ -228,19 +229,19 @@ class Role:
   The engine treats Role as read-only metadata awarded when a player
   satisfies the `requirements` (a mapping of Gem -> required amount).
   """
-  id: Optional[str] = None
-  name: Optional[str] = None
+  id: str | None = None
+  name: str | None = None
   points: int = 0
   # Accept iterator or mapping at construction time via InitVar; the
   # public attributes `requirements` and `metadata` are always tuples.
-  requirements_in: InitVar[Union[Iterable[Tuple[Gem, int]], Mapping[Gem, int]]] = ()
-  metadata_in: InitVar[Union[Iterable[Tuple[str, Any]], Mapping[str, Any]]] = ()
+  requirements_in: InitVar[Iterable[tuple[Gem, int]] | Mapping[Gem, int]] = ()
   requirements: GemList = field(init=False, default_factory=GemList)
-  metadata: Tuple[Tuple[str, Any], ...] = field(init=False, default_factory=tuple)
+  metadata_in: InitVar[Iterable[tuple[str, Any]] | Mapping[str, Any]] = ()
+  metadata: tuple[tuple[str, Any], ...] = field(init=False, default_factory=tuple)
 
   def __post_init__(self, requirements_in, metadata_in):
     # normalize and store the tuple-backed public attributes
-    object.__setattr__(self, 'requirements', GemList(_to_kv_tuple(requirements_in)))
+    object.__setattr__(self, 'requirements', GemList(requirements_in))
     object.__setattr__(self, 'metadata', _to_kv_tuple(metadata_in))
 
   def to_dict(self) -> dict:

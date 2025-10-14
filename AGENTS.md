@@ -170,3 +170,4 @@ The following instruction are written by user and should be KEPT as is.
 - prefer modifying existing test cases instead of adding new ones.
 - we don't use `if __name__ == "__main__":` or cli in our code.
 - we use `# %%` to split cells in scripts for vscode, consider it as a notebook.
+- use PEP 585 style generics, e.g. `list[int]` instead of `List[int]`.

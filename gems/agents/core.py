@@ -4,19 +4,19 @@ Follows the contract described in AGENTS.md. Keep this file minimal.
 All Python code in this repo uses 2-space indentation.
 """
 import random
-from typing import Optional, Sequence, Any
+from collections.abc import Sequence
 
 from ..state import PlayerState, GameState
 from ..actions import Action
 
 
 class Agent:
-  def __init__(self, seat_id: int, rng: Optional[random.Random] = None):
+  def __init__(self, seat_id: int, rng: random.Random | None = None):
     self.seat_id = seat_id
     # Use a local RNG instance to guarantee reproducible behavior
     self.rng = rng or random.Random()
 
-  def reset(self, seed: Optional[int] = None) -> None:
+  def reset(self, seed: int | None = None) -> None:
     if seed is not None:
       self.rng.seed(seed)
 
@@ -28,7 +28,7 @@ class Agent:
     """
     pass
 
-  def act(self, state: GameState, legal_actions: Sequence[Action], *, timeout: Optional[float] = None) -> Action:
+  def act(self, state: GameState, legal_actions: Sequence[Action], *, timeout: float | None = None) -> Action:
     """Return one element from `legal_actions`.
 
     Subclasses must return one of the provided `legal_actions` (by identity

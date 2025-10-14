@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Optional, Mapping, Tuple
+from collections.abc import Mapping
 from abc import ABC, abstractmethod
 
 from .consts import COIN_MAX_COUNT_PER_PLAYER, COIN_MIN_COUNT_TAKE2_IN_DECK
@@ -27,7 +27,7 @@ class Action(ABC):
     return Take2Action.create(gem, count, ret_map=ret_map)
 
   @classmethod
-  def buy(cls, card: Card, payment: Optional[Mapping[Gem, int]] = None) -> 'BuyCardAction':
+  def buy(cls, card: Card, payment: Mapping[Gem, int] | None = None) -> 'BuyCardAction':
     return BuyCardAction.create(card, payment=payment)
 
   @classmethod
@@ -83,12 +83,12 @@ class Action(ABC):
 
 @dataclass(frozen=True)
 class Take3Action(Action):
-  gems: Tuple[Gem, ...] = field(default_factory=tuple)
+  gems: tuple[Gem, ...] = field(default_factory=tuple)
   # optional returned gems to satisfy max-10 hand size after taking
-  ret: Optional[GemList] = None
+  ret: GemList | None = None
 
   @classmethod
-  def create(cls, *gems: Gem, ret_map: Optional[Mapping[Gem, int]] = None) -> 'Take3Action':
+  def create(cls, *gems: Gem, ret_map: Mapping[Gem, int] | None = None) -> 'Take3Action':
     ret = GemList(ret_map) if ret_map is not None else None
     return cls(type=ActionType.TAKE_3_DIFFERENT, gems=tuple(gems), ret=ret)
 
@@ -189,10 +189,10 @@ class Take2Action(Action):
   gem: Gem
   count: int = 2
   # optional returned gems to satisfy max tokens per player after taking
-  ret: Optional[GemList] = None
+  ret: GemList | None = None
 
   @classmethod
-  def create(cls, gem: Gem, count: int = 2, ret_map: Optional[Mapping[Gem, int]] = None) -> 'Take2Action':
+  def create(cls, gem: Gem, count: int = 2, ret_map: Mapping[Gem, int] | None = None) -> 'Take2Action':
     ret = GemList(ret_map) if ret_map is not None else None
     return cls(type=ActionType.TAKE_2_SAME, gem=gem, count=count, ret=ret)
 
@@ -289,7 +289,7 @@ class BuyCardAction(Action):
   payment: GemList = field(default_factory=GemList)
 
   @classmethod
-  def create(cls, card: Card, payment: Optional[Mapping[Gem, int]] = None) -> 'BuyCardAction':
+  def create(cls, card: Card, payment: Mapping[Gem, int] | None = None) -> 'BuyCardAction':
     pay = GemList(dict(payment) if payment is not None else {})
     return cls(type=ActionType.BUY_CARD, card=card, payment=pay)
 
