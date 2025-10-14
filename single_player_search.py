@@ -30,6 +30,7 @@ from __future__ import annotations
 from collections import defaultdict
 from copy import deepcopy
 import random
+from tqdm import tqdm
 
 from gems.engine import Engine
 from gems.agents.greedy import GreedyAgent, quick_score
@@ -63,9 +64,7 @@ def _play_to_end(engine: Engine, debug=False) -> Engine:
 
 def play_to_end(engines: list[Engine]) -> list[Engine]:
   end_engines: list[Engine] = []
-  for i, e in enumerate(engines):
-    if i % 100 == 0:
-      print(f" {i} / {len(engines)}")
+  for e in tqdm(engines, desc="play to end"):
     end_engines.append(_play_to_end(e))
   return end_engines
 
@@ -82,7 +81,7 @@ def single_player_search(all_depth=5) -> list[Engine]:
     next_depth = depth + 1
     current_engines = depth_engine_map[depth]
     print(f"current depth: {depth} engine nums: {len(current_engines)}")
-    for e in current_engines:
+    for e in tqdm(current_engines, desc=f"depth {depth} expand"):
       depth_engine_map[next_depth].extend(expand_search(e, top_n=5))
     depth += 1
   print("expand finish")
@@ -114,9 +113,7 @@ end_engines = play_to_end(start_engines)
 
 # %%
 engine_score_list: list[tuple[Engine, int]] = []
-for i, e in enumerate(end_engines):
-  if i % 100 == 0:
-    print(f" {i} / {len(end_engines)}")
+for e in tqdm(end_engines, desc="gather scores"):
   player = e._state.players[0]
   score = player.score
   engine_score_list.append((e, score))
@@ -134,3 +131,5 @@ for a in engine_score_list[1][0]._action_history:
 # %%
 if __name__ == "__main__":
   single_player_search()
+
+# %%
