@@ -79,7 +79,7 @@ class GemList:
   def get(self, gem: Gem) -> int:
     return dict(self._pairs).get(gem, 0)
 
-  def to_dict(self) -> dict:
+  def to_dict(self) -> dict[Gem, int]:
     return {g: n for g, n in self._pairs}
 
   def as_tuple(self) -> Tuple[Tuple['Gem', int], ...]:

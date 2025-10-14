@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 from typing import Optional, Mapping, Tuple
 from abc import ABC, abstractmethod
 
-from .consts import COIN_MIN_COUNT_TAKE2_IN_DECK
+from .consts import COIN_MAX_COUNT_PER_PLAYER, COIN_MIN_COUNT_TAKE2_IN_DECK
 from .typings import Gem, ActionType, GemList, Card
 from .state import PlayerState, GameState
 from .utils import _replace_tuple
@@ -85,17 +85,19 @@ class Action(ABC):
 class Take3Action(Action):
   gems: Tuple[Gem, ...] = field(default_factory=tuple)
   # optional returned gems to satisfy max-10 hand size after taking
-  returns: GemList = field(default_factory=GemList)
+  ret: Optional[GemList] = None
 
   @classmethod
-  def create(cls, *gems: Gem, returns: Optional[Mapping[Gem, int]] = None) -> 'Take3Action':
-    ret = GemList(dict(returns) if returns is not None else {})
-    return cls(type=ActionType.TAKE_3_DIFFERENT, gems=tuple(gems), returns=ret)
+  def create(cls, *gems: Gem, ret_map: Optional[Mapping[Gem, int]] = None) -> 'Take3Action':
+    ret = GemList(ret_map) if ret_map is not None else None
+    return cls(type=ActionType.TAKE_3_DIFFERENT, gems=tuple(gems), ret=ret)
 
   def __str__(self) -> str:
     gem_str = ''.join(g.color_circle() for g in self.gems)
-    ret = ''.join(f"-{n}{g.color_circle()}" for g, n in self.returns) if self.returns else ""
-    return f"Action.Take3({gem_str}{ret})"
+    ret_str = ''.join(f"{g.color_circle()}" * n for g, n in self.ret) if self.ret else None
+    if ret_str:
+      return f"Action.Take3({gem_str}-{ret_str})"
+    return f"Action.Take3({gem_str})"
 
   def _apply(self, player: PlayerState, state: GameState) -> GameState:
     # Mutable working copies: convert GemList/tuples into mutable dicts/lists
@@ -104,18 +106,15 @@ class Take3Action(Action):
     visible_cards = list(state.visible_cards)
 
     # remove one of each requested gem from bank and add to player's gems
-    for g in getattr(self, 'gems', ()):  # type: ignore[attr-defined]
-      if bank.get(g, 0) <= 0:
-        raise ValueError(f"Not enough {g} in bank to take")
+    for g in self.gems:
       bank[g] = bank.get(g, 0) - 1
       player_gems[g] = player_gems.get(g, 0) + 1
 
     # apply returns (if any): validate player has those gems and move back to bank
-    for g, amt in getattr(self, 'returns', ()):  # type: ignore[attr-defined]
-      if player_gems.get(g, 0) < amt:
-        raise ValueError(f"Player does not have enough {g} to return")
-      player_gems[g] = player_gems.get(g, 0) - amt
-      bank[g] = bank.get(g, 0) + amt
+    if self.ret:
+      for g, amt in self.ret:
+        player_gems[g] = player_gems.get(g, 0) - amt
+        bank[g] = bank.get(g, 0) + amt
 
     new_player = PlayerState(seat_id=player.seat_id, name=player.name,
                              gems_in=player_gems, score=player.score,
@@ -137,16 +136,15 @@ class Take3Action(Action):
     # If returns provided, ensure player would have enough tokens after taking to return
     # Compute player's gems after taking
     player_gems = {g: n for g, n in player.gems}
-    for g in self.gems:
-      player_gems[g] = player_gems.get(g, 0) + 1
-    # validate returns
-    for g, amt in getattr(self, 'returns', ()):  # type: ignore[attr-defined]
-      if player_gems.get(g, 0) < amt:
-        return False
+    if self.ret:
+      for g, amt in self.ret:
+        if player_gems.get(g, 0) < amt:
+          return False
 
     # check final total does not exceed 10
-    total_after = sum(player_gems.values()) - sum(n for _, n in getattr(self, 'returns', ()))
-    if total_after > 10:
+    total_after = sum(player_gems.values()) + len(self.gems) - \
+        (sum(n for _, n in self.ret) if self.ret else 0)
+    if total_after > COIN_MAX_COUNT_PER_PLAYER:
       return False
     return True
 
@@ -157,59 +155,33 @@ class Take3Action(Action):
     # distinct gems (permissive fallback matching previous logic).
     bank = {g: amt for g, amt in state.bank}
     available = [g for g, amt in bank.items() if amt > 0 and g != Gem.GOLD]
+    total = sum(n for _, n in player.gems)
     actions: list[Take3Action] = []
+    if len(available) == 0:
+      return actions  # no gems available to take
+
     from itertools import combinations
 
-    # helper: enumerate multisets of returns of size k from player's gems after taking
-    def enumerate_returns(after_gems: dict, k: int):
-      # after_gems: mapping gem->count
-      # yield dicts mapping gem->count summing to k
-      if k <= 0:
-        yield {}
-        return
-      items = [(g, n) for g, n in after_gems.items() if n > 0]
-      # backtracking
-      def backtrack(i, need, cur):
-        if need == 0:
-          yield dict(cur)
-          return
-        if i >= len(items):
-          return
-        g, maxn = items[i]
-        for take in range(0, min(maxn, need) + 1):
-          if take > 0:
-            cur.append((g, take))
-          yield from backtrack(i + 1, need - take, cur)
-          if take > 0:
-            cur.pop()
-
-      yield from backtrack(0, k, [])
-
-    if len(available) > 3:
-      combos = list(combinations(available, 3))
-    elif len(available) != 0:
-      combos = [tuple(available)]
-    else:
-      combos = []
-
-    for combo in combos:
-      # current total gems count
-      total = sum(n for _, n in player.gems)
-      need_return = max(0, total + len(combo) - 10)
-      if need_return == 0:
+    max_take = min(len(available), 3)
+    if total + max_take <= COIN_MAX_COUNT_PER_PLAYER:
+      # can take max_take without exceeding 10, so enumerate all combos of that size
+      combos = combinations(available, max_take)
+      for combo in combos:
         actions.append(cls.create(*combo))
-        continue
-
-      # simulate player's gems after taking
-      after = {g: n for g, n in player.gems}
-      for g in combo:
-        after[g] = after.get(g, 0) + 1
-
-      # enumerate possible return multisets of size need_return
-      for ret in enumerate_returns(after, need_return):
-        # convert list/dict form to mapping for create
-        actions.append(cls.create(*combo, returns=ret))
-
+    else:
+      max_return = total + max_take - COIN_MAX_COUNT_PER_PLAYER
+      for return_num in range(0, max_return + 1):
+        take_num = COIN_MAX_COUNT_PER_PLAYER + return_num - total
+        combos = combinations(available, take_num)
+        for combo in combos:
+          ret_available = [[g] * amt for g, amt in player.gems if g not in combo and g != Gem.GOLD]
+          ret_available = [g for sublist in ret_available for g in sublist]
+          return_combos = set(combinations(ret_available, return_num))
+          for ret in return_combos:
+            ret_map: Mapping[Gem, int] = {}
+            for g in ret:
+              ret_map[g] = ret_map.get(g, 0) + 1
+            actions.append(cls.create(*combo, ret_map=ret_map))
     return actions
 
 

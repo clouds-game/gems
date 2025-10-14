@@ -161,8 +161,8 @@ def test_take3_with_returns_enumerated_and_apply():
   has_returns = False
   chosen = None
   for a in take3_actions:
-    if isinstance(a, Take3Action):
-      ret = dict(a.returns)
+    if isinstance(a, Take3Action) and a.ret is not None:
+      ret = a.ret.to_dict()
       if sum(ret.values()) > 0:
         has_returns = True
         chosen = a
@@ -174,10 +174,11 @@ def test_take3_with_returns_enumerated_and_apply():
   total_before = sum(n for _, n in p0.gems)
   need = max(0, total_before + 3 - 10)
   assert chosen is not None
-  assert sum(dict(chosen.returns).values()) == need
+  assert chosen.ret is not None
+  assert sum(chosen.ret.to_dict().values()) == need
 
   # apply the action and verify final totals and bank adjustments
   new_state = chosen.apply(state)
   new_p0 = new_state.players[0]
   # player's total gems must be <= 10
-  assert sum(n for _, n in new_p0.gems) <= 10
+  assert sum(n for _, n in new_p0.gems) == 10
