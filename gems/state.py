@@ -122,49 +122,23 @@ class PlayerState:
         Take2Action,
         BuyCardAction,
         ReserveCardAction,
+        NoopAction,
     )
     """Enumerate a permissive set of legal actions for this player.
 
-    This is a port of the `Engine.get_legal_actions` logic to be available
-    directly from a PlayerState instance. It does not mutate `state`.
+    Delegates to each Action subclass' `_get_legal_actions` classmethod so
+    logic is co-located with the action definitions. Falls back to a
+    single NoopAction if no actions are available.
     """
-    player = self
-
-    bank = {g: amt for g, amt in state.bank}
-
     actions: List[Action] = []
-
-    available_gems = [g for g, amt in bank.items() if amt > 0 and g != Gem.GOLD]
-    from itertools import combinations
-    if len(available_gems) > 3:
-      for combo in combinations(available_gems, 3):
-        actions.append(Take3Action.create(*combo))
-    elif len(available_gems) != 0:
-      actions.append(Take3Action.create(*available_gems))
-
-    for g, amt in bank.items():
-      if g == Gem.GOLD:
-        continue
-      if amt >= 4:
-        actions.append(Take2Action.create(g, 2))
-
-    gold_in_bank = bank.get(Gem.GOLD, 0)
-    # visible_cards = state.visible_cards + self.reserved_cards
-
-    for card in state.visible_cards + self.reserved_cards:
-
-      payments = player.can_afford(card)
-      for payment in payments:
-        actions.append(BuyCardAction.create(card, payment=payment))
-
-    if self.can_reserve():
-      for card in state.visible_cards:
-        take_gold = gold_in_bank > 0
-        actions.append(ReserveCardAction.create(card, take_gold=take_gold))
-
+    # Gather from each action type
+    actions.extend(Take3Action._get_legal_actions(self, state))
+    actions.extend(Take2Action._get_legal_actions(self, state))
+    actions.extend(BuyCardAction._get_legal_actions(self, state))
+    actions.extend(ReserveCardAction._get_legal_actions(self, state))
+    # Fallback
     if not actions:
       return [Action.noop()]
-
     return actions
 
 

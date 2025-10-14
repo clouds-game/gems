@@ -123,6 +123,22 @@ class Take3Action(Action):
         return False
     return True
 
+  @classmethod
+  def _get_legal_actions(cls, player: PlayerState, state: GameState) -> list["Take3Action"]:
+    # Enumerate legal take3 actions: either any combination of 3 distinct non-gold gems
+    # with at least 1 in bank, or (if <3 available) a single action taking all remaining
+    # distinct gems (permissive fallback matching previous logic).
+    bank = {g: amt for g, amt in state.bank}
+    available = [g for g, amt in bank.items() if amt > 0 and g != Gem.GOLD]
+    actions: list[Take3Action] = []
+    from itertools import combinations
+    if len(available) > 3:
+      for combo in combinations(available, 3):
+        actions.append(cls.create(*combo))
+    elif len(available) != 0:
+      actions.append(cls.create(*available))
+    return actions
+
 
 @dataclass(frozen=True)
 class Take2Action(Action):
@@ -135,6 +151,7 @@ class Take2Action(Action):
 
   def __str__(self) -> str:
     return f"Action.Take2({self.count}{self.gem.color_circle()})"
+
   def _apply(self, player: PlayerState, state: GameState) -> GameState:
     # Mutable working copies: convert GemList/tuples into mutable dicts/lists
     bank = dict(state.bank)
@@ -166,6 +183,18 @@ class Take2Action(Action):
     if state.bank.get(self.gem) < COIN_MIN_COUNT_TAKE2_IN_DECK:
       return False
     return True
+
+  @classmethod
+  def _get_legal_actions(cls, player: PlayerState, state: GameState) -> list["Take2Action"]:
+    # Any non-gold gem with >= COIN_MIN_COUNT_TAKE2_IN_DECK (typically 4) is legal to take 2 of.
+    actions: list[Take2Action] = []
+    for g, amt in state.bank:
+      if g == Gem.GOLD:
+        continue
+      if amt >= COIN_MIN_COUNT_TAKE2_IN_DECK:
+        actions.append(cls.create(g, 2))
+    return actions
+
 
 @dataclass(frozen=True)
 class BuyCardAction(Action):
@@ -242,6 +271,16 @@ class BuyCardAction(Action):
       return False
     return player.check_afford(card, dict(self.payment))
 
+  @classmethod
+  def _get_legal_actions(cls, player: PlayerState, state: GameState) -> list["BuyCardAction"]:
+    # For each visible or reserved card, enumerate all exact payment dicts the player can afford.
+    actions: list[BuyCardAction] = []
+    for card in state.visible_cards + player.reserved_cards:
+      payments = player.can_afford(card)
+      for payment in payments:
+        actions.append(cls.create(card, payment=payment))
+    return actions
+
 
 @dataclass(frozen=True)
 class ReserveCardAction(Action):
@@ -299,6 +338,19 @@ class ReserveCardAction(Action):
       return False
     return True
 
+  @classmethod
+  def _get_legal_actions(cls, player: PlayerState, state: GameState) -> list["ReserveCardAction"]:
+    actions: list[ReserveCardAction] = []
+    if not player.can_reserve():
+      return actions
+    gold_in_bank = state.bank.get(Gem.GOLD)
+    take_gold = gold_in_bank > 0
+    for card in state.visible_cards:
+      # Card must be visible to reserve; include gold token if available
+      actions.append(cls.create(card, take_gold=take_gold))
+    return actions
+
+
 @dataclass(frozen=True)
 class NoopAction(Action):
   """A no-op/fallback action that advances the turn without mutating state."""
@@ -318,3 +370,8 @@ class NoopAction(Action):
 
   def _check(self, player: PlayerState, state: GameState) -> bool:
     return True
+
+  @classmethod
+  def _get_legal_actions(cls, player: PlayerState, state: GameState) -> list["NoopAction"]:
+    # Always legal; only used as fallback if no other actions exist.
+    return [cls.create()]
