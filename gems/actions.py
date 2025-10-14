@@ -94,8 +94,8 @@ class Take3Action(Action):
 
   def __str__(self) -> str:
     gem_str = ''.join(g.color_circle() for g in self.gems)
-    ret_str = ''.join(f"{g.color_circle()}" * n for g, n in self.ret) if self.ret else None
-    if ret_str:
+    if self.ret:
+      ret_str = ''.join(f"{g.color_circle()}" * n for g, n in self.ret)
       return f"Action.Take3({gem_str}-{ret_str})"
     return f"Action.Take3({gem_str})"
 
@@ -189,13 +189,20 @@ class Take3Action(Action):
 class Take2Action(Action):
   gem: Gem
   count: int = 2
+  # optional returned gems to satisfy max tokens per player after taking
+  ret: Optional[GemList] = None
 
   @classmethod
-  def create(cls, gem: Gem, count: int = 2) -> 'Take2Action':
-    return cls(type=ActionType.TAKE_2_SAME, gem=gem, count=count)
+  def create(cls, gem: Gem, count: int = 2, ret_map: Optional[Mapping[Gem, int]] = None) -> 'Take2Action':
+    ret = GemList(ret_map) if ret_map is not None else None
+    return cls(type=ActionType.TAKE_2_SAME, gem=gem, count=count, ret=ret)
 
   def __str__(self) -> str:
-    return f"Action.Take2({self.count}{self.gem.color_circle()})"
+    base = f"Action.Take2({self.gem.color_circle()}*{self.count})"
+    if self.ret:
+      ret_str = ''.join(f"{g.color_circle()}" * n for g, n in self.ret)
+      return base[:-1] + f"-{ret_str})"
+    return base
 
   def _apply(self, player: PlayerState, state: GameState) -> GameState:
     # Mutable working copies: convert GemList/tuples into mutable dicts/lists
@@ -212,6 +219,12 @@ class Take2Action(Action):
     bank[gem] = bank.get(gem, 0) - count
     player_gems[gem] = player_gems.get(gem, 0) + count
 
+    # apply returns if provided
+    if self.ret:
+      for g, amt in self.ret:
+        player_gems[g] = player_gems.get(g, 0) - amt
+        bank[g] = bank.get(g, 0) + amt
+
     new_player = PlayerState(seat_id=player.seat_id, name=player.name,
                              gems_in=player_gems, score=player.score,
                              reserved_cards_in=player.reserved_cards,
@@ -227,17 +240,48 @@ class Take2Action(Action):
       return False
     if state.bank.get(self.gem) < COIN_MIN_COUNT_TAKE2_IN_DECK:
       return False
+
+    player_gems = player.gems.to_dict()
+
+    if self.ret:
+      for g, amt in self.ret:
+        if player_gems.get(g, 0) < amt:
+          return False
+
+    total_after = sum(player_gems.values()) + self.count - (sum(n for _, n in self.ret) if self.ret else 0)
+    if total_after > COIN_MAX_COUNT_PER_PLAYER:
+      return False
     return True
 
   @classmethod
   def _get_legal_actions(cls, player: PlayerState, state: GameState) -> list["Take2Action"]:
     # Any non-gold gem with >= COIN_MIN_COUNT_TAKE2_IN_DECK (typically 4) is legal to take 2 of.
     actions: list[Take2Action] = []
-    for g, amt in state.bank:
+    bank = {g: amt for g, amt in state.bank}
+    total = sum(n for _, n in player.gems)
+    for g, amt in bank.items():
       if g == Gem.GOLD:
         continue
-      if amt >= COIN_MIN_COUNT_TAKE2_IN_DECK:
+      if amt < COIN_MIN_COUNT_TAKE2_IN_DECK:
+        continue
+
+      # compute if taking 2 would exceed the max
+      need_return = max(0, total + 2 - COIN_MAX_COUNT_PER_PLAYER)
+      if need_return == 0:
         actions.append(cls.create(g, 2))
+        continue
+
+      # enumerate return combinations from player's holdings excluding the gem being taken and gold
+      ret_available = [[gg] * cnt for gg, cnt in player.gems if gg != g and gg != Gem.GOLD]
+      ret_available = [x for sub in ret_available for x in sub]
+      from itertools import combinations
+      return_combos = set(combinations(ret_available, need_return))
+      for ret in return_combos:
+        ret_map: Mapping[Gem, int] = {}
+        for gg in ret:
+          ret_map[gg] = ret_map.get(gg, 0) + 1
+        actions.append(cls.create(g, 2, ret_map=ret_map))
+
     return actions
 
 
