@@ -182,3 +182,59 @@ def test_take3_with_returns_enumerated_and_apply():
   new_p0 = new_state.players[0]
   # player's total gems must be <= 10
   assert sum(n for _, n in new_p0.gems) == 10
+
+
+def test_take3_no_return_needed_enumerates_combos():
+  # if player has room, Take3 should enumerate all 3-combinations of available colors
+  e = Engine.new(2)
+  p0 = PlayerState(seat_id=0, gems=GemList(()))
+  p1 = PlayerState(seat_id=1, gems=GemList(()))
+  # create a bank with 5 colored gems available
+  bank = GemList(((Gem.RED, 1), (Gem.BLUE, 1), (Gem.WHITE, 1), (Gem.BLACK, 1), (Gem.GREEN, 1), (Gem.GOLD, 5)))
+  state = GameState(players=(p0, p1), bank=bank, visible_cards_in=(), turn=0)
+  e._state = state
+
+  actions = e.get_legal_actions(seat_id=0)
+  take3 = [a for a in actions if a.type == ActionType.TAKE_3_DIFFERENT]
+  # expect C(5,3) combos
+  assert len(take3) == 10
+  # none should include a return payload
+  assert all((not getattr(a, 'ret', None)) for a in take3)
+
+
+def test_take3_with_required_returns_enumerated():
+  # player with many tokens may need to return after taking
+  e = Engine.new(2)
+  # player has 9 gems: 5 red, 4 blue
+  p0 = PlayerState(seat_id=0, gems=GemList(((Gem.RED, 5), (Gem.BLUE, 4))))
+  p1 = PlayerState(seat_id=1, gems=GemList(()))
+  # bank has 3 other colors available to take
+  bank = GemList(((Gem.WHITE, 1), (Gem.BLACK, 1), (Gem.GREEN, 1), (Gem.GOLD, 5)))
+  state = GameState(players=(p0, p1), bank=bank, visible_cards_in=(), turn=0)
+  e._state = state
+
+  actions = e.get_legal_actions(seat_id=0)
+  take3 = [a for a in actions if a.type == ActionType.TAKE_3_DIFFERENT]
+  # should include actions that require returning 2 tokens
+  assert len(take3) == 3 + 3 * 2 + 1 * 3
+  assert len([a for a in take3 if getattr(a, 'ret', None)]) == 3 * 2 + 1 * 3
+
+
+def test_take3_returns_within_player_holdings():
+  # ensure any enumerated return amounts do not exceed player's holdings
+  e = Engine.new(2)
+  # player has 8 gems: 5 red, 3 blue (needs 1 return when taking 3)
+  p0 = PlayerState(seat_id=0, gems=GemList(((Gem.RED, 5), (Gem.BLUE, 3))))
+  p1 = PlayerState(seat_id=1, gems=GemList(()))
+  bank = GemList(((Gem.WHITE, 1), (Gem.BLACK, 1), (Gem.GREEN, 1), (Gem.GOLD, 5)))
+  state = GameState(players=(p0, p1), bank=bank, visible_cards_in=(), turn=0)
+  e._state = state
+
+  actions = e.get_legal_actions(seat_id=0)
+  take3 = [a for a in actions if a.type == ActionType.TAKE_3_DIFFERENT]
+  for a in take3:
+    if getattr(a, 'ret', None):
+      for g, amt in getattr(a, 'ret'):
+        # player originally had this many of g
+        orig = dict(p0.gems).get(g, 0)
+        assert amt <= orig
