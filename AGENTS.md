@@ -163,6 +163,10 @@ Tell me which next step you'd like.
 The following instruction are written by user and should be KEPT as is.
 -->
 # Python
+- TAKE CARE OF THE INDENTATION.
 - All Python code should have indentation of 2 spaces per level.
 - You could run `uv add` to add some dependencies when needed.
 - use `runTests` provided by vscode to run the tests.
+- prefer modifying existing test cases instead of adding new ones.
+- we don't use `if __name__ == "__main__":` or cli in our code.
+- we use `# %%` to split cells in scripts for vscode, consider it as a notebook.

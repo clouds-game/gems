@@ -133,8 +133,5 @@ for a in engine_score_list[0][0]._action_history:
 print("--" * 20)
 for a in engine_score_list[1][0]._action_history:
   print(a)
-# %%
-if __name__ == "__main__":
-  single_player_search()
 
 # %%

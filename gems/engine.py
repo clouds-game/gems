@@ -48,7 +48,6 @@ class Engine:
       decks_by_level: Dict[int, List[Card]],
       roles_deck: List[Role],
       rng: random.Random,
-      visible_roles: Sequence[Role],
       all_noops_last_round: bool = False,
       action_history: Optional[Sequence[Action]] = None,
   ) -> None:
@@ -73,7 +72,6 @@ class Engine:
         decks_by_level={},
         roles_deck=[],
         rng=random.Random(),
-        visible_roles=[],
     )
     engine.load_and_shuffle_assets(seed=seed)
     visible_cards = []
@@ -99,7 +97,6 @@ class Engine:
         decks_by_level={lvl: list(deck) for lvl, deck in self.decks_by_level.items()},
         roles_deck=list(self.roles_deck),
         rng=random.Random(seed),  # new RNG instance
-        visible_roles=list(self._state.visible_roles),
         all_noops_last_round=self._all_noops_last_round,
         action_history=list(self._action_history),
     )
