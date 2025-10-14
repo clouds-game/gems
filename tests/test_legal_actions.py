@@ -1,6 +1,8 @@
+import math
 import pytest
 from gems import Engine
 from gems.actions import Action, Take2Action
+from gems.consts import CARD_LEVELS, CARD_VISIBLE_COUNT
 from gems.typings import ActionType, Gem, Card, GemList
 from gems.state import PlayerState, GameState
 
@@ -311,3 +313,29 @@ def test_take2_returns_within_player_holdings():
       for g, amt in getattr(a, 'ret'):
         orig = dict(p0.gems).get(g, 0)
         assert amt <= orig
+
+def test_initial_state_actions_num():
+  e = Engine.new(2)
+  actions = e.get_legal_actions(seat_id=0)
+  kinds = len(Gem) - 1
+  assert len(actions) == math.comb(kinds, 3) + kinds + 0 + len(CARD_LEVELS) * CARD_VISIBLE_COUNT
+
+def test_initial_state_has_no_illegal_actions():
+  # Create a fresh engine and enumerate legal actions for player 0
+  e = Engine.new(2)
+  state = e.get_state()
+  player = state.players[0]
+  actions = e.get_legal_actions(seat_id=0)
+  illegal = []
+
+  for a in actions:
+    # _check should pass and apply should succeed without mutating original state
+    try:
+      if not a._check(player, state):
+        illegal.append(a)
+        continue
+      # apply on a snapshot; ensure no exception
+      a.apply(state)
+    except Exception:
+      illegal.append(a)
+  assert len(illegal) == 0, f"Found illegal actions in initial state: {illegal}"
