@@ -29,6 +29,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 import random
+from typing import Optional
 from tqdm import tqdm
 
 from gems.engine import Engine
@@ -36,7 +37,7 @@ from gems.agents.greedy import GreedyAgent, quick_score
 from gems.typings import ActionType
 
 
-def expand_search(engine: Engine, top_n: int = 3) -> list[Engine]:
+def expand_search(engine: Engine, top_n: Optional[int] = 5) -> list[Engine]:
   if engine.game_end():
     return []
   actions = engine.get_legal_actions()
@@ -44,8 +45,10 @@ def expand_search(engine: Engine, top_n: int = 3) -> list[Engine]:
     return []
   action_score = [(a, quick_score(engine._state, 0, a)) for a in actions]
   action_score.sort(key=lambda x: x[1], reverse=True)
+  if top_n and top_n > 0:
+    action_score = action_score[:top_n]
   res: list[Engine] = []
-  for a, s in action_score[:top_n]:
+  for a, s in action_score:
     new_engine = engine.clone()
     new_engine._state = a.apply(new_engine._state)
     new_engine._action_history.append(a)
@@ -68,7 +71,7 @@ def play_to_end(engines: list[Engine]) -> list[Engine]:
   return end_engines
 
 
-def single_player_search(all_depth=5) -> list[Engine]:
+def single_player_search(all_depth=3) -> list[Engine]:
   """Run a single-player search/simulation until win or no actions."""
   engine = Engine.new(num_players=1, names=["Solo"], seed=20)
   agent = GreedyAgent(seat_id=0, rng=random.Random(100))
@@ -81,7 +84,7 @@ def single_player_search(all_depth=5) -> list[Engine]:
     current_engines = depth_engine_map[depth]
     print(f"current depth: {depth} engine nums: {len(current_engines)}")
     for e in tqdm(current_engines, desc=f"depth {depth} expand"):
-      depth_engine_map[next_depth].extend(expand_search(e, top_n=5))
+      depth_engine_map[next_depth].extend(expand_search(e, top_n=None))
     depth += 1
   print("expand finish")
   return depth_engine_map[depth]
@@ -106,23 +109,27 @@ def single_play():
 
 
 # %%
-import cProfile
-def get_engines(depth=5) -> list[Engine]:
+
+
+def get_engines(depth=3) -> list[Engine]:
   start_engines = single_player_search(all_depth=depth)
   end_engines = play_to_end(start_engines)
   return end_engines
 
+
+# %%
+import cProfile
 cProfile.run('get_engines(4)', sort=2)
 
 
 # %%
-end_engines = get_engines()
+end_engines = get_engines(3)
 engine_score_list: list[tuple[Engine, int]] = []
 for e in tqdm(end_engines, desc="gather scores"):
   player = e._state.players[0]
   score = player.score
   engine_score_list.append((e, score))
-engine_score_list.sort(key=lambda x: (x[1], -x[0]._state.turn), reverse=True)
+engine_score_list.sort(key=lambda x: (-x[0]._state.turn, x[1]), reverse=True)
 for e, score in engine_score_list[:20:2]:
   print("==" * 20)
   print(f"score: {score}, turns: {e._state.turn}")
