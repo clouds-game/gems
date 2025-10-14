@@ -91,7 +91,7 @@ class Take3Action(Action):
 
   def __str__(self) -> str:
     gem_str = ''.join(g.color_circle() for g in self.gems)
-    return f"Action.Take3(gems=[{gem_str}])"
+    return f"Action.Take3({gem_str})"
 
   def _apply(self, player: PlayerState, state: GameState) -> GameState:
     # Mutable working copies: convert GemList/tuples into mutable dicts/lists
@@ -134,10 +134,7 @@ class Take2Action(Action):
     return cls(type=ActionType.TAKE_2_SAME, gem=gem, count=count)
 
   def __str__(self) -> str:
-    if self.count != 2:
-      return f"Action.Take2({self.gem.color_circle()}{self.count})"
-    return f"Action.Take2({self.gem.color_circle()})"
-
+    return f"Action.Take2({self.count}{self.gem.color_circle()})"
   def _apply(self, player: PlayerState, state: GameState) -> GameState:
     # Mutable working copies: convert GemList/tuples into mutable dicts/lists
     bank = dict(state.bank)
@@ -181,8 +178,7 @@ class BuyCardAction(Action):
     return cls(type=ActionType.BUY_CARD, card=card, payment=pay)
 
   def __str__(self) -> str:
-    pay_str = ''.join(f"{g.color_circle()}{n}" for g, n in self.payment)
-    return f"Action.Buy({self.card.id}, {pay_str})"
+    return f"Action.Buy(<{self.card.id}>, {self.payment})"
 
   def _apply(self, player: PlayerState, state: GameState) -> GameState:
     # Mutable working copies
@@ -258,8 +254,8 @@ class ReserveCardAction(Action):
 
   def __str__(self) -> str:
     if self.take_gold:
-      return f"Action.Reserve({self.card.id}, D)"
-    return f"Action.Reserve({self.card.id})"
+      return f"Action.Reserve(<{self.card.id}>, {Gem.GOLD.color_circle()})"
+    return f"Action.Reserve(<{self.card.id}>)"
 
   def _apply(self, player: PlayerState, state: GameState) -> GameState:
     # Mutable working copies
