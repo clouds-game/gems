@@ -29,7 +29,6 @@ from __future__ import annotations
 
 from collections import defaultdict
 import random
-from typing import Optional
 from tqdm import tqdm
 
 from gems.engine import Engine
@@ -37,7 +36,7 @@ from gems.agents.greedy import GreedyAgent, quick_score
 from gems.typings import ActionType
 
 
-def expand_search(engine: Engine, top_n: Optional[int] = 5) -> list[Engine]:
+def expand_search(engine: Engine, top_n: int | None = None) -> list[Engine]:
   if engine.game_end():
     return []
   actions = engine.get_legal_actions()
@@ -84,7 +83,7 @@ def single_player_search(all_depth=3) -> list[Engine]:
     current_engines = depth_engine_map[depth]
     print(f"current depth: {depth} engine nums: {len(current_engines)}")
     for e in tqdm(current_engines, desc=f"depth {depth} expand"):
-      depth_engine_map[next_depth].extend(expand_search(e, top_n=None))
+      depth_engine_map[next_depth].extend(expand_search(e))
     depth += 1
   print("expand finish")
   return depth_engine_map[depth]

@@ -14,7 +14,7 @@ def _to_kv_tuple(v: Sequence):
     # sort dict items by stringified key so callers may pass either
     # string keys or Gem enum keys without causing a TypeError from
     # comparing Enum instances.
-    return tuple(sorted(v.items(), key=lambda kv: str(kv[0])))
+    return tuple(v.items())
   return tuple(v)
 
 

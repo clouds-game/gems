@@ -55,15 +55,18 @@ class GemList:
   Provides lightweight helpers to convert to/from dict and to iterate.
   """
   COLOR_ORDER = (Gem.BLUE, Gem.WHITE, Gem.BLACK, Gem.RED, Gem.GREEN, Gem.GOLD)
-  _pairs: tuple[tuple['Gem', int], ...] = field(default_factory=tuple)
+  _pairs: Mapping[Gem, int] = field(default_factory=dict)
 
-  def __init__(self, vals: Iterable[tuple['Gem', int]] | Mapping['Gem', int] = ()):  # pragma: no cover - simple wrapper
+  def __init__(self, vals: tuple[tuple['Gem', int], ...] | Mapping['Gem', int] = ()):  # pragma: no cover - simple wrapper
     # normalize via the existing helper
-    pairs = _to_kv_tuple(vals)
+    if isinstance(vals, GemList):
+      pairs = vals._pairs
+    else:
+      pairs = dict(vals)
     object.__setattr__(self, '_pairs', pairs)
 
   def __iter__(self) -> Iterator[tuple['Gem', int]]:
-    return iter(self._pairs)
+    return iter(self._pairs.items())
 
   def __len__(self) -> int:
     return len(self._pairs)
@@ -73,18 +76,18 @@ class GemList:
 
   def normalized(self) -> 'GemList':
     """Return a new GemList with all gems in COLOR_ORDER and zero counts removed."""
-    counts = dict(self._pairs)
+    counts = self._pairs
     normalized_pairs = tuple((g, counts[g]) for g in self.COLOR_ORDER if counts.get(g, 0) > 0)
     return GemList(normalized_pairs)
 
   def get(self, gem: Gem) -> int:
-    return dict(self._pairs).get(gem, 0)
+    return self._pairs.get(gem, 0)
 
   def to_dict(self) -> dict[Gem, int]:
-    return {g: n for g, n in self._pairs}
+    return dict(self._pairs)
 
-  def as_tuple(self) -> tuple[tuple['Gem', int], ...]:
-    return self._pairs
+  def as_tuple(self) -> tuple[tuple[Gem, int], ...]:
+    return tuple(self._pairs.items())
 
   def __repr__(self) -> str:  # pragma: no cover - convenience
     return f"GemList({self._pairs!r})"
