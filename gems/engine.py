@@ -33,31 +33,57 @@ class Engine:
   - `print_summary()` to display a human readable summary
   """
 
-  def __init__(self, num_players: int = 2, names: Optional[List[str]] = None, seed: Optional[int] = None):
+  def __init__(
+      self,
+      *,
+      num_players: int,
+      names: Optional[List[str]],
+      state: GameState,
+      decks_by_level: Dict[int, List[Card]],
+      roles_deck: List[Role],
+      rng: random.Random,
+      visible_roles: Sequence[Role],
+      all_noops_last_round: bool = False,
+      action_history: Optional[Sequence[Action]] = None,
+  ) -> None:
     self._num_players = num_players
     self._names = names
-    self._state = self.create_game(num_players, names)
-    # load and shuffle assets, then draw initial visible cards and roles
-    # default seed omitted for non-deterministic startup; callers can
-    # re-seed by calling `load_and_shuffle_assets` explicitly.
-    self.load_and_shuffle_assets(seed=seed)
-    # draw 4 cards for each level (1..3)
+    self._state = state
+    self.decks_by_level = decks_by_level
+    self.roles_deck = roles_deck
+    self._rng = rng
+    self.visible_roles = list(visible_roles)
+    self._all_noops_last_round = all_noops_last_round
+    self._action_history = list(action_history) if action_history is not None else []
+
+  @staticmethod
+  def new(num_players: int = 2, names: Optional[List[str]] = None, seed: Optional[int] = None) -> "Engine":
+    if not (1 <= num_players <= 4):
+      raise ValueError("num_players must be between 1 and 4")
+    state = Engine.create_game(num_players, names)
+    engine = Engine(
+        num_players=num_players,
+        names=names,
+        state=state,
+        decks_by_level={},
+        roles_deck=[],
+        rng=random.Random(),
+        visible_roles=[],
+    )
+    engine.load_and_shuffle_assets(seed=seed)
     visible = []
     for lvl in (1, 2, 3):
-      drawn = self.draw_from_deck(lvl, 4)
-      # drawn are popped in LIFO order; present them as top-first by
-      # reversing the drawn list so consumers see the top card first.
+      drawn = engine.draw_from_deck(lvl, 4)
       visible.extend(reversed(drawn))
-    # draw num_players + 1 roles and store separately
     roles_to_draw = (num_players or 2) + 1
-    self.visible_roles = []
-    for _ in range(min(roles_to_draw, len(self.roles_deck))):
-      self.visible_roles.append(self.roles_deck.pop())
-    # update GameState.visible_cards to include the visible cards
-    self._state = GameState(players=self._state.players, bank=self._state.bank,
-                            visible_cards_in=visible, turn=self._state.turn)
-    self._all_noops_last_round = False
-    self._action_history: List[Action] = []
+    engine.visible_roles = []
+    for _ in range(min(roles_to_draw, len(engine.roles_deck))):
+      engine.visible_roles.append(engine.roles_deck.pop())
+    engine._state = GameState(players=engine._state.players, bank=engine._state.bank,
+                              visible_cards_in=visible, turn=engine._state.turn)
+    engine._all_noops_last_round = False
+    engine._action_history = []
+    return engine
 
   @staticmethod
   def create_game(num_players: int = 2, names: Optional[List[str]] = None) -> GameState:

@@ -71,7 +71,7 @@ def play_to_end(engines: list[Engine]) -> list[Engine]:
 
 def single_player_search(all_depth=5) -> list[Engine]:
   """Run a single-player search/simulation until win or no actions."""
-  engine = Engine(num_players=1, names=["Solo"], seed=20)
+  engine = Engine.new(num_players=1, names=["Solo"], seed=20)
   agent = GreedyAgent(seat_id=0, rng=random.Random(100))
 
   depth_engine_map = defaultdict(list)
@@ -89,7 +89,7 @@ def single_player_search(all_depth=5) -> list[Engine]:
 
 
 def single_play():
-  engine = Engine(num_players=1, names=["Solo"])
+  engine = Engine.new(num_players=1, names=["Solo"])
   agent = GreedyAgent(seat_id=0, rng=random.Random(100))
   print("Initialized game state:\n")
   engine.print_summary()

@@ -2,8 +2,8 @@ from gems import Engine
 
 
 def test_deterministic_shuffle_same_seed():
-  e1 = Engine(2)
-  e2 = Engine(2)
+  e1 = Engine.new(2)
+  e2 = Engine.new(2)
 
   e1.load_and_shuffle_assets(seed=12345)
   e2.load_and_shuffle_assets(seed=12345)
@@ -16,7 +16,7 @@ def test_deterministic_shuffle_same_seed():
 
 
 def test_draw_and_peek_behavior():
-  e = Engine(2)
+  e = Engine.new(2)
   e.load_and_shuffle_assets(seed=42)
 
   lvl = 1

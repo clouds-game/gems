@@ -13,7 +13,7 @@ from gems.typings import ActionType
 
 if __name__ == "__main__":
   # initialize a 3-player game and run a short random-play simulation
-  engine = Engine(num_players=3, names=["Alice", "Bob", "Cara"])
+  engine = Engine.new(num_players=3, names=["Alice", "Bob", "Cara"])
   # create one RandomAgent per seat and seed deterministically for reproducibility
   rng = random.Random(0)
   agents = [RandomAgent(seat_id=i, rng=random.Random(100 + i)) for i in range(3)]
