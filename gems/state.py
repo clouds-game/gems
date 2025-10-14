@@ -1,7 +1,7 @@
 from dataclasses import InitVar, dataclass, field
 from typing import Iterable, Mapping, Optional, List, Dict, TYPE_CHECKING
 
-from .typings import Gem, GemList, Card, CardList
+from .typings import Gem, GemList, Card, CardList, Role
 from .utils import _to_kv_tuple
 
 if TYPE_CHECKING:
@@ -180,11 +180,13 @@ class GameState:
   bank: GemList = field(default_factory=GemList)
   visible_cards_in: InitVar[Iterable[Card] | CardList | None] = None
   visible_cards: CardList = field(default_factory=CardList)
+  visible_roles_in: InitVar[Iterable[Role] | List[Role] | None] = None
+  visible_roles: tuple[Role, ...] = field(default_factory=tuple)
   turn: int = 0
   round: int = 0
   last_action: Optional["Action"] = None
 
-  def __post_init__(self, bank_in, visible_cards_in):
+  def __post_init__(self, bank_in, visible_cards_in, visible_roles_in):
     # normalize inputs into tuples where appropriate so the public
     # API is always immutable. Allow callers to provide dicts or
     # iterables; we try to be forgiving.
@@ -192,6 +194,8 @@ class GameState:
       object.__setattr__(self, 'bank', GemList(_to_kv_tuple(bank_in)))
     if visible_cards_in is not None:
       object.__setattr__(self, 'visible_cards', CardList(visible_cards_in))
+    if visible_roles_in is not None:
+      object.__setattr__(self, 'visible_roles', tuple(visible_roles_in))
     object.__setattr__(self, 'players', tuple(self.players))
     object.__setattr__(self, 'visible_cards', CardList(self.visible_cards))
 

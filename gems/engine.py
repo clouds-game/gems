@@ -33,6 +33,12 @@ class Engine:
   - `print_summary()` to display a human readable summary
   """
 
+  _num_players: int
+  _state: GameState
+  decks_by_level: Dict[int, List[Card]]
+  roles_deck: List[Role]
+  _rng: random.Random
+
   def __init__(
       self,
       *,
@@ -52,7 +58,6 @@ class Engine:
     self.decks_by_level = decks_by_level
     self.roles_deck = roles_deck
     self._rng = rng
-    self.visible_roles = list(visible_roles)
     self._all_noops_last_round = all_noops_last_round
     self._action_history = list(action_history) if action_history is not None else []
 
@@ -71,18 +76,33 @@ class Engine:
         visible_roles=[],
     )
     engine.load_and_shuffle_assets(seed=seed)
-    visible = []
+    visible_cards = []
     for lvl in (1, 2, 3):
       drawn = engine.draw_from_deck(lvl, 4)
-      visible.extend(reversed(drawn))
+      visible_cards.extend(reversed(drawn))
     roles_to_draw = (num_players or 2) + 1
-    engine.visible_roles = []
+    visible_roles = []
     for _ in range(min(roles_to_draw, len(engine.roles_deck))):
-      engine.visible_roles.append(engine.roles_deck.pop())
+      visible_roles.append(engine.roles_deck.pop())
     engine._state = GameState(players=engine._state.players, bank=engine._state.bank,
-                              visible_cards_in=visible, turn=engine._state.turn)
+                              visible_cards_in=visible_cards, visible_roles_in=visible_roles,
+                              turn=engine._state.turn)
     engine._all_noops_last_round = False
     engine._action_history = []
+    return engine
+
+  def clone(self, seed=None) -> "Engine":
+    engine = Engine(
+        num_players=self._num_players,
+        names=self._names,
+        state=self._state,
+        decks_by_level={lvl: list(deck) for lvl, deck in self.decks_by_level.items()},
+        roles_deck=list(self.roles_deck),
+        rng=random.Random(seed),  # new RNG instance
+        visible_roles=list(self._state.visible_roles),
+        all_noops_last_round=self._all_noops_last_round,
+        action_history=list(self._action_history),
+    )
     return engine
 
   @staticmethod

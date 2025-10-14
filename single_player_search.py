@@ -28,7 +28,6 @@ Implementation notes:
 from __future__ import annotations
 
 from collections import defaultdict
-from copy import deepcopy
 import random
 from tqdm import tqdm
 
@@ -47,7 +46,7 @@ def expand_search(engine: Engine, top_n: int = 3) -> list[Engine]:
   action_score.sort(key=lambda x: x[1], reverse=True)
   res: list[Engine] = []
   for a, s in action_score[:top_n]:
-    new_engine = deepcopy(engine)
+    new_engine = engine.clone()
     new_engine._state = a.apply(new_engine._state)
     new_engine._action_history.append(a)
     new_engine.advance_turn()
@@ -107,11 +106,17 @@ def single_play():
 
 
 # %%
-start_engines = single_player_search()
-end_engines = play_to_end(start_engines)
+import cProfile
+def get_engines(depth=5) -> list[Engine]:
+  start_engines = single_player_search(all_depth=depth)
+  end_engines = play_to_end(start_engines)
+  return end_engines
+
+cProfile.run('get_engines(4)', sort=2)
 
 
 # %%
+end_engines = get_engines()
 engine_score_list: list[tuple[Engine, int]] = []
 for e in tqdm(end_engines, desc="gather scores"):
   player = e._state.players[0]
