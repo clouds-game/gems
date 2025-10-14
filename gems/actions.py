@@ -19,11 +19,11 @@ class Action(ABC):
   type: ActionType
 
   @classmethod
-  def take3(cls, *gems: Gem, ret_map: Optional[Mapping[Gem, int]] = None) -> 'Take3Action':
+  def take3(cls, *gems: Gem, ret_map: Mapping[Gem, int] | None = None) -> 'Take3Action':
     return Take3Action.create(*gems, ret_map=ret_map)
 
   @classmethod
-  def take2(cls, gem: Gem, count: int = 2, ret_map: Optional[Mapping[Gem, int]] = None) -> 'Take2Action':
+  def take2(cls, gem: Gem, count: int = 2, ret_map: Mapping[Gem, int] | None = None) -> 'Take2Action':
     return Take2Action.create(gem, count, ret_map=ret_map)
 
   @classmethod
