@@ -90,7 +90,7 @@ class Take3Action(Action):
     return cls(type=ActionType.TAKE_3_DIFFERENT, gems=tuple(gems))
 
   def __str__(self) -> str:
-    gem_str = ''.join(g.short_str() for g in self.gems)
+    gem_str = ''.join(g.color_circle() for g in self.gems)
     return f"Action.Take3(gems=[{gem_str}])"
 
   def _apply(self, player: PlayerState, state: GameState) -> GameState:
@@ -135,8 +135,8 @@ class Take2Action(Action):
 
   def __str__(self) -> str:
     if self.count != 2:
-      return f"Action.Take2({self.gem.short_str()}{self.count})"
-    return f"Action.Take2({self.gem.short_str()})"
+      return f"Action.Take2({self.gem.color_circle()}{self.count})"
+    return f"Action.Take2({self.gem.color_circle()})"
 
   def _apply(self, player: PlayerState, state: GameState) -> GameState:
     # Mutable working copies: convert GemList/tuples into mutable dicts/lists
@@ -181,7 +181,7 @@ class BuyCardAction(Action):
     return cls(type=ActionType.BUY_CARD, card=card, payment=pay)
 
   def __str__(self) -> str:
-    pay_str = ''.join(f"{g.short_str()}{n}" for g, n in self.payment)
+    pay_str = ''.join(f"{g.color_circle()}{n}" for g, n in self.payment)
     return f"Action.Buy({self.card.id}, {pay_str})"
 
   def _apply(self, player: PlayerState, state: GameState) -> GameState:

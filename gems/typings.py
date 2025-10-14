@@ -27,6 +27,22 @@ class Gem(Enum):
       return 'D'  # avoid confusion with GREEN
     return self.value[0].upper()
 
+  def color_circle(self) -> str:  # pragma: no cover - tiny convenience
+    """Return a colored circle emoji representing this gem."""
+    if self == Gem.RED:
+      return "🔴"
+    if self == Gem.BLUE:
+      return "🔵"
+    if self == Gem.WHITE:
+      return "⚪"
+    if self == Gem.BLACK:
+      return "⚫"
+    if self == Gem.GREEN:
+      return "🟢"
+    if self == Gem.GOLD:
+      return "🟡"
+    return "⭕"  # fallback to HEAVY LARGE CIRCLE
+
 
 @dataclass(frozen=True)
 class GemList:
@@ -37,6 +53,7 @@ class GemList:
   Construction accepts a tuple, dict, or any iterable of (Gem, int).
   Provides lightweight helpers to convert to/from dict and to iterate.
   """
+  COLOR_ORDER = (Gem.BLUE, Gem.WHITE, Gem.BLACK, Gem.RED, Gem.GREEN, Gem.GOLD)
   _pairs: Tuple[Tuple['Gem', int], ...] = field(default_factory=tuple)
 
   def __init__(self, vals: Union[Iterable[Tuple['Gem', int]], Mapping['Gem', int]] = ()):  # pragma: no cover - simple wrapper
@@ -53,6 +70,12 @@ class GemList:
   def __getitem__(self, i):
     return self._pairs[i]
 
+  def normalized(self) -> 'GemList':
+    """Return a new GemList with all gems in COLOR_ORDER and zero counts removed."""
+    counts = dict(self._pairs)
+    normalized_pairs = tuple((g, counts[g]) for g in self.COLOR_ORDER if counts.get(g, 0) > 0)
+    return GemList(normalized_pairs)
+
   def get(self, gem: Gem) -> int:
     return dict(self._pairs).get(gem, 0)
 
@@ -66,7 +89,7 @@ class GemList:
     return f"GemList({self._pairs!r})"
 
   def __str__(self) -> str:  # pragma: no cover - convenience
-    return "".join(f"{g.short_str()}{n}" for g, n in self._pairs if n > 0) or "Na"
+    return "".join(f"{n}{g.color_circle()}" for g, n in self) or "⭕"
 
 
 class ActionType(Enum):
@@ -132,10 +155,9 @@ class Card:
                metadata_in=metadata)
 
   def __str__(self) -> str:  # pragma: no cover - tiny convenience
-    bonus = self.bonus.short_str() if self.bonus else "N"
-    points = f"{self.points}" if self.points > 0 else ""
-    costs = "".join(f"{g.short_str()}{n}" for g, n in self.cost)
-    return f"Card([{self.id}][{self.level}]{bonus}{points}:{costs})"
+    bonus = self.bonus.color_circle() if self.bonus else "⭕"
+    points = f"[{self.points}]" if self.points > 0 else ""
+    return f"Card{self.level}(<{self.id}>{points}{bonus}:{self.cost})"
 
 
 @dataclass(frozen=True)

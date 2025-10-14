@@ -11,7 +11,7 @@ entrypoint.
 from typing import List, Optional, Dict, Sequence, TypeVar
 
 from .agents.core import Agent
-from .consts import CARD_LEVELS, DEFAULT_PLAYERS, CARD_VISIBLE_COUNT
+from .consts import CARD_LEVELS, COIN_DEFAULT_INIT, COIN_GOLD_INIT, DEFAULT_PLAYERS, CARD_VISIBLE_COUNT
 
 from .typings import ActionType, Gem, Card, Role
 from .state import PlayerState, GameState
@@ -79,7 +79,7 @@ class Engine:
     for lvl in CARD_LEVELS:
       drawn = engine.draw_from_deck(lvl, CARD_VISIBLE_COUNT)
       visible_cards.extend(reversed(drawn))
-    roles_to_draw = (num_players or 2) + 1
+    roles_to_draw = (num_players or DEFAULT_PLAYERS) + 1
     visible_roles = []
     for _ in range(min(roles_to_draw, len(engine.roles_deck))):
       visible_roles.append(engine.roles_deck.pop())
@@ -120,14 +120,15 @@ class Engine:
 
     players = [PlayerState(seat_id=i, name=names[i]) for i in range(num_players)]
 
+    coin_default_init = COIN_DEFAULT_INIT[min(num_players, DEFAULT_PLAYERS) - 1]
     # Typical gem counts for a 2-4 player game (simple heuristic):
     bank = (
-        (Gem.RED, 7),
-        (Gem.BLUE, 7),
-        (Gem.WHITE, 7),
-        (Gem.BLACK, 7),
-        (Gem.GREEN, 7),
-        (Gem.GOLD, 5),
+        (Gem.RED, coin_default_init),
+        (Gem.BLUE, coin_default_init),
+        (Gem.WHITE, coin_default_init),
+        (Gem.BLACK, coin_default_init),
+        (Gem.GREEN, coin_default_init),
+        (Gem.GOLD, COIN_GOLD_INIT),
     )
 
     visible_cards = tuple()
