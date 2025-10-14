@@ -84,14 +84,18 @@ class Action(ABC):
 @dataclass(frozen=True)
 class Take3Action(Action):
   gems: Tuple[Gem, ...] = field(default_factory=tuple)
+  # optional returned gems to satisfy max-10 hand size after taking
+  returns: GemList = field(default_factory=GemList)
 
   @classmethod
-  def create(cls, *gems: Gem) -> 'Take3Action':
-    return cls(type=ActionType.TAKE_3_DIFFERENT, gems=tuple(gems))
+  def create(cls, *gems: Gem, returns: Optional[Mapping[Gem, int]] = None) -> 'Take3Action':
+    ret = GemList(dict(returns) if returns is not None else {})
+    return cls(type=ActionType.TAKE_3_DIFFERENT, gems=tuple(gems), returns=ret)
 
   def __str__(self) -> str:
     gem_str = ''.join(g.color_circle() for g in self.gems)
-    return f"Action.Take3({gem_str})"
+    ret = ''.join(f"-{n}{g.color_circle()}" for g, n in self.returns) if self.returns else ""
+    return f"Action.Take3({gem_str}{ret})"
 
   def _apply(self, player: PlayerState, state: GameState) -> GameState:
     # Mutable working copies: convert GemList/tuples into mutable dicts/lists
@@ -106,6 +110,13 @@ class Take3Action(Action):
       bank[g] = bank.get(g, 0) - 1
       player_gems[g] = player_gems.get(g, 0) + 1
 
+    # apply returns (if any): validate player has those gems and move back to bank
+    for g, amt in getattr(self, 'returns', ()):  # type: ignore[attr-defined]
+      if player_gems.get(g, 0) < amt:
+        raise ValueError(f"Player does not have enough {g} to return")
+      player_gems[g] = player_gems.get(g, 0) - amt
+      bank[g] = bank.get(g, 0) + amt
+
     new_player = PlayerState(seat_id=player.seat_id, name=player.name,
                              gems_in=player_gems, score=player.score,
                              reserved_cards_in=player.reserved_cards,
@@ -117,10 +128,26 @@ class Take3Action(Action):
                      last_action=self)
 
   def _check(self, player: PlayerState, state: GameState) -> bool:
-    bank = dict(state.bank)
+    # Ensure each gem to take is available in bank
+    bank = {g: amt for g, amt in state.bank}
     for g in self.gems:
       if bank.get(g, 0) <= 0:
         return False
+
+    # If returns provided, ensure player would have enough tokens after taking to return
+    # Compute player's gems after taking
+    player_gems = {g: n for g, n in player.gems}
+    for g in self.gems:
+      player_gems[g] = player_gems.get(g, 0) + 1
+    # validate returns
+    for g, amt in getattr(self, 'returns', ()):  # type: ignore[attr-defined]
+      if player_gems.get(g, 0) < amt:
+        return False
+
+    # check final total does not exceed 10
+    total_after = sum(player_gems.values()) - sum(n for _, n in getattr(self, 'returns', ()))
+    if total_after > 10:
+      return False
     return True
 
   @classmethod
@@ -132,11 +159,57 @@ class Take3Action(Action):
     available = [g for g, amt in bank.items() if amt > 0 and g != Gem.GOLD]
     actions: list[Take3Action] = []
     from itertools import combinations
+
+    # helper: enumerate multisets of returns of size k from player's gems after taking
+    def enumerate_returns(after_gems: dict, k: int):
+      # after_gems: mapping gem->count
+      # yield dicts mapping gem->count summing to k
+      if k <= 0:
+        yield {}
+        return
+      items = [(g, n) for g, n in after_gems.items() if n > 0]
+      # backtracking
+      def backtrack(i, need, cur):
+        if need == 0:
+          yield dict(cur)
+          return
+        if i >= len(items):
+          return
+        g, maxn = items[i]
+        for take in range(0, min(maxn, need) + 1):
+          if take > 0:
+            cur.append((g, take))
+          yield from backtrack(i + 1, need - take, cur)
+          if take > 0:
+            cur.pop()
+
+      yield from backtrack(0, k, [])
+
     if len(available) > 3:
-      for combo in combinations(available, 3):
-        actions.append(cls.create(*combo))
+      combos = list(combinations(available, 3))
     elif len(available) != 0:
-      actions.append(cls.create(*available))
+      combos = [tuple(available)]
+    else:
+      combos = []
+
+    for combo in combos:
+      # current total gems count
+      total = sum(n for _, n in player.gems)
+      need_return = max(0, total + len(combo) - 10)
+      if need_return == 0:
+        actions.append(cls.create(*combo))
+        continue
+
+      # simulate player's gems after taking
+      after = {g: n for g, n in player.gems}
+      for g in combo:
+        after[g] = after.get(g, 0) + 1
+
+      # enumerate possible return multisets of size need_return
+      for ret in enumerate_returns(after, need_return):
+        # convert list/dict form to mapping for create
+        actions.append(cls.create(*combo, returns=ret))
+
     return actions
 
 

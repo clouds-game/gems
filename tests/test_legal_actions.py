@@ -142,3 +142,42 @@ def test_player_can_buy_own_reserved_card():
   actions = e.get_legal_actions(seat_id=0)
   # ensure buying own reserved card is exposed as a legal action
   assert any(a.type == ActionType.BUY_CARD for a in actions)
+
+
+def test_take3_with_returns_enumerated_and_apply():
+  # player has 8 gems; taking 3 would go to 11 so must return 1
+  from gems.actions import Take3Action
+
+  e = Engine.new(2)
+  # craft player with 8 gems (3 red, 3 blue, 2 white)
+  p0 = PlayerState(seat_id=0, gems=GemList(((Gem.RED, 3), (Gem.BLUE, 3), (Gem.WHITE, 2))))
+  p1 = PlayerState(seat_id=1, gems=GemList(()))
+  state = GameState(players=(p0, p1), bank=e.get_state().bank, visible_cards_in=(), turn=0)
+  e._state = state
+
+  actions = e.get_legal_actions(seat_id=0)
+  take3_actions = [a for a in actions if a.type == ActionType.TAKE_3_DIFFERENT]
+  # Expect at least one such action that includes a returns payload (since need_return == 1)
+  has_returns = False
+  chosen = None
+  for a in take3_actions:
+    if isinstance(a, Take3Action):
+      ret = dict(a.returns)
+      if sum(ret.values()) > 0:
+        has_returns = True
+        chosen = a
+        break
+
+  assert has_returns, "Expected at least one Take3Action with returns when taking would exceed 10 gems"
+
+  # ensure returns sum equals needed amount
+  total_before = sum(n for _, n in p0.gems)
+  need = max(0, total_before + 3 - 10)
+  assert chosen is not None
+  assert sum(dict(chosen.returns).values()) == need
+
+  # apply the action and verify final totals and bank adjustments
+  new_state = chosen.apply(state)
+  new_p0 = new_state.players[0]
+  # player's total gems must be <= 10
+  assert sum(n for _, n in new_p0.gems) <= 10
