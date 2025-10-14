@@ -10,7 +10,8 @@ entrypoint.
 
 from typing import List, Optional, Dict, Sequence, TypeVar
 
-from gems.agents.core import Agent
+from .agents.core import Agent
+from .consts import CARD_LEVELS, DEFAULT_PLAYERS, CARD_VISIBLE_COUNT
 
 from .typings import ActionType, Gem, Card, Role
 from .state import PlayerState, GameState
@@ -61,7 +62,7 @@ class Engine:
     self._action_history = list(action_history) if action_history is not None else []
 
   @staticmethod
-  def new(num_players: int = 2, names: Optional[List[str]] = None, seed: Optional[int] = None) -> "Engine":
+  def new(num_players: int = DEFAULT_PLAYERS, names: Optional[List[str]] = None, seed: Optional[int] = None) -> "Engine":
     if not (1 <= num_players <= 4):
       raise ValueError("num_players must be between 1 and 4")
     state = Engine.create_game(num_players, names)
@@ -75,8 +76,8 @@ class Engine:
     )
     engine.load_and_shuffle_assets(seed=seed)
     visible_cards = []
-    for lvl in (1, 2, 3):
-      drawn = engine.draw_from_deck(lvl, 4)
+    for lvl in CARD_LEVELS:
+      drawn = engine.draw_from_deck(lvl, CARD_VISIBLE_COUNT)
       visible_cards.extend(reversed(drawn))
     roles_to_draw = (num_players or 2) + 1
     visible_roles = []
@@ -103,7 +104,7 @@ class Engine:
     return engine
 
   @staticmethod
-  def create_game(num_players: int = 2, names: Optional[List[str]] = None) -> GameState:
+  def create_game(num_players: int = DEFAULT_PLAYERS, names: Optional[List[str]] = None) -> GameState:
     """Create and return a minimal starting GameState.
 
     - num_players: between 2 and 4 (inclusive).

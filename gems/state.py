@@ -1,6 +1,7 @@
 from dataclasses import InitVar, dataclass, field
 from typing import Iterable, Mapping, Optional, List, Dict, TYPE_CHECKING
 
+from .consts import CARD_MAX_COUNT_RESERVED
 from .typings import Gem, GemList, Card, CardList, Role
 from .utils import _to_kv_tuple
 
@@ -112,7 +113,7 @@ class PlayerState:
 
   def can_reserve(self) -> bool:
     """Return whether this player can reserve another card."""
-    return len(self.reserved_cards) < 3
+    return len(self.reserved_cards) < CARD_MAX_COUNT_RESERVED
 
   def get_legal_actions(self, state: "GameState") -> List["Action"]:
     from .actions import (

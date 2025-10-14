@@ -2,6 +2,7 @@ from dataclasses import dataclass, field
 from typing import Optional, Mapping, Tuple
 from abc import ABC, abstractmethod
 
+from .consts import COIN_MIN_COUNT_TAKE2_IN_DECK
 from .typings import Gem, ActionType, GemList, Card
 from .state import PlayerState, GameState
 from .utils import _replace_tuple
@@ -165,7 +166,7 @@ class Take2Action(Action):
   def _check(self, player: PlayerState, state: GameState) -> bool:
     if self.gem == Gem.GOLD:
       return False
-    if state.bank.get(self.gem) < 4:
+    if state.bank.get(self.gem) < COIN_MIN_COUNT_TAKE2_IN_DECK:
       return False
     return True
 
