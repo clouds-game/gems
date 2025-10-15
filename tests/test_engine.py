@@ -45,3 +45,28 @@ def test_serialize_deserialize_replay_roundtrip():
   e2.apply_replay()
   assert e2.get_state() == e1.get_state()
   assert len(e2._action_history) == len(e1._action_history)
+
+
+def test_serialize_deserialize_assets_roundtrip():
+  # ensure that decks_by_level and roles_deck are the same after
+  # serialize -> deserialize (assets are shuffled deterministically
+  # using the provided seed)
+  e1 = Engine.new(3, ["A", "B", "C"], seed=42)
+  # copy the structures for comparison
+  decks1 = {lvl: list(deck) for lvl, deck in e1.decks_by_level.items()}
+  roles1 = list(e1.roles_deck)
+
+  data = e1.serialize()
+  e2 = Engine.deserialize(data)
+  # after deserialize the assets should be available on the engine
+  # (Engine.new called during deserialize uses the same seed)
+  assert isinstance(e2.decks_by_level, dict)
+  assert isinstance(e2.roles_deck, list)
+
+  # decks_by_level should have same levels and same card identities/order
+  for lvl, deck in decks1.items():
+    assert lvl in e2.decks_by_level
+    assert list(e2.decks_by_level[lvl]) == deck
+
+  # roles_deck should match
+  assert list(e2.roles_deck) == roles1
