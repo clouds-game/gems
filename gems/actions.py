@@ -28,12 +28,17 @@ class Action(ABC):
     return Take2Action.create(gem, count, ret_map=ret_map)
 
   @classmethod
-  def buy(cls, card: Card | None, payment: Mapping[Gem, int] | None = None, idx: CardIdx | None = None) -> 'BuyCardAction':
-    return BuyCardAction.create(card, payment=payment, idx=idx)
+  def buy(cls, card: Card, payment: Mapping[Gem, int] | None = None, visible_idx: int | None = None, reserve_idx: int | None = None) -> 'BuyCardAction':
+    # maintain friendly legacy signature: build CardIdx from provided indices
+    idx = None
+    if visible_idx is not None or reserve_idx is not None:
+      idx = CardIdx(visible_idx=visible_idx, reserve_idx=reserve_idx)
+    return BuyCardAction.create(idx, card, payment=payment)
 
   @classmethod
-  def reserve(cls, card: Card | None, take_gold: bool = True, idx: CardIdx | None = None) -> 'ReserveCardAction':
-    return ReserveCardAction.create(card, take_gold=take_gold, idx=idx)
+  def reserve(cls, card: Card, take_gold: bool = True, visible_idx: int | None = None) -> 'ReserveCardAction':
+    idx = CardIdx(visible_idx=visible_idx) if visible_idx is not None else None
+    return ReserveCardAction.create(idx, card, take_gold=take_gold)
 
   @classmethod
   def noop(cls) -> 'NoopAction':
@@ -362,9 +367,9 @@ class BuyCardAction(Action):
   payment: GemList = field(default_factory=GemList)
 
   @classmethod
-  def create(cls, card: Card | None, payment: Mapping[Gem, int] | None = None, idx: CardIdx | None = None) -> 'BuyCardAction':
+  def create(cls, card_idx: CardIdx | None, card: Card | None = None, payment: Mapping[Gem, int] | None = None) -> 'BuyCardAction':
     pay = GemList(dict(payment) if payment is not None else {})
-    return cls(type=ActionType.BUY_CARD, card=card, payment=pay, idx=idx)
+    return cls(type=ActionType.BUY_CARD, card=card, payment=pay, idx=card_idx)
 
   def __str__(self) -> str:
     cid = getattr(self.card, 'id', None)
@@ -395,7 +400,7 @@ class BuyCardAction(Action):
     reserve_idx = idx_raw.get('reserve_idx')
     deck_head_level = idx_raw.get('deck_head_level')
     idx = CardIdx(visible_idx=visible_idx, reserve_idx=reserve_idx, deck_head_level=deck_head_level) if idx_raw else None
-    return cls.create(card, payment=payment, idx=idx)
+    return cls.create(idx, card, payment=payment)
 
   def _apply(self, player: PlayerState, state: GameState) -> GameState:
     # Mutable working copies
@@ -491,13 +496,13 @@ class BuyCardAction(Action):
       payments = player.can_afford(card)
       for payment in payments:
         idx = CardIdx(visible_idx=i)
-        actions.append(cls.create(card, payment=payment, idx=idx))
+        actions.append(cls.create(idx, card, payment=payment))
     # reserved cards with indices
     for i, card in enumerate(player.reserved_cards):
       payments = player.can_afford(card)
       for payment in payments:
         idx = CardIdx(reserve_idx=i)
-        actions.append(cls.create(card, payment=payment, idx=idx))
+        actions.append(cls.create(idx, card, payment=payment))
     return actions
 
 
@@ -510,8 +515,8 @@ class ReserveCardAction(Action):
   ret: Gem | None = None
 
   @classmethod
-  def create(cls, card: Card | None, take_gold: bool = True, ret: Gem | None = None, idx: CardIdx | None = None) -> 'ReserveCardAction':
-    return cls(type=ActionType.RESERVE_CARD, card=card, take_gold=bool(take_gold), ret=ret, idx=idx)
+  def create(cls, card_idx: CardIdx | None, card: Card | None, take_gold: bool = True, ret: Gem | None = None) -> 'ReserveCardAction':
+    return cls(type=ActionType.RESERVE_CARD, card=card, take_gold=bool(take_gold), ret=ret, idx=card_idx)
 
   def __str__(self) -> str:
     cid = getattr(self.card, 'id', None)
@@ -549,7 +554,7 @@ class ReserveCardAction(Action):
     reserve_idx = idx_raw.get('reserve_idx')
     deck_head_level = idx_raw.get('deck_head_level')
     idx = CardIdx(visible_idx=visible_idx, reserve_idx=reserve_idx, deck_head_level=deck_head_level) if idx_raw else None
-    return cls.create(card, take_gold=take_gold, ret=ret, idx=idx)
+    return cls.create(idx, card, take_gold=take_gold, ret=ret)
 
   def _apply(self, player: PlayerState, state: GameState) -> GameState:
     # Mutable working copies
@@ -652,10 +657,10 @@ class ReserveCardAction(Action):
           if cnt <= 0:
             continue
           idx = CardIdx(visible_idx=i)
-          actions.append(cls.create(card, take_gold=True, ret=g, idx=idx))
+          actions.append(cls.create(idx, card, take_gold=True, ret=g))
       else:
         idx = CardIdx(visible_idx=i)
-        actions.append(cls.create(card, take_gold=take_gold, idx=idx))
+        actions.append(cls.create(idx, card, take_gold=take_gold))
     return actions
 
 
