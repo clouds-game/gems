@@ -40,7 +40,8 @@ from gems.consts import CARD_VISIBLE_TOTAL_COUNT, CARD_LEVEL_COUNT
 
 from .engine import Engine
 from .actions import Action
-from .typings import Gem
+from .typings import Gem, ActionType, Card
+from .consts import COIN_MAX_COUNT_PER_PLAYER
 from .agents.random import RandomAgent
 
 
@@ -159,6 +160,180 @@ class StateSpace(spaces.Dict):
         'costs': visible_costs,
       },
     }
+
+
+class ActionSpace(spaces.Dict):
+  """Structured encoding of Action objects for gymnasium agents.
+
+  The `type` field selects which subset of data is meaningful for the action.
+  Other subsets remain zeroed so a single dict shape can represent all actions.
+  """
+
+  _CARD_ID_MAX_LENGTH = 64
+
+  class Take3Dict(TypedDict):
+    gems: np.ndarray
+    ret: np.ndarray
+
+  class Take2Dict(TypedDict):
+    gem: np.ndarray
+    count: np.ndarray
+    ret: np.ndarray
+
+  class CardDict(TypedDict):
+    id: str
+    level: np.ndarray
+    points: np.ndarray
+    bonus: np.ndarray
+    costs: np.ndarray
+
+  class BuyDict(TypedDict):
+    card: "ActionSpace.CardDict"
+    payment: np.ndarray
+
+  class ReserveDict(TypedDict):
+    card: "ActionSpace.CardDict"
+    take_gold: np.ndarray
+    ret: np.ndarray
+
+  class ActionDict(TypedDict):
+    type: np.ndarray
+    take3: "ActionSpace.Take3Dict"
+    take2: "ActionSpace.Take2Dict"
+    buy: "ActionSpace.BuyDict"
+    reserve: "ActionSpace.ReserveDict"
+
+  def __init__(self, *, seed = None):
+    self._type_order = tuple(ActionType)
+    self._type_index = {atype: idx for idx, atype in enumerate(self._type_order)}
+    super().__init__({
+      'type': spaces.Discrete(len(self._type_order)),
+      'take3': spaces.Dict({
+        'gems': spaces.Box(low=0, high=1, shape=(GEM_COUNT,), dtype=np.int8),
+        'ret': spaces.Box(low=0, high=COIN_MAX_COUNT_PER_PLAYER, shape=(GEM_COUNT,), dtype=np.int8),
+      }),
+      'take2': spaces.Dict({
+        'gem': spaces.MultiBinary(GEM_COUNT),
+        'count': spaces.Discrete(3),
+        'ret': spaces.Box(low=0, high=COIN_MAX_COUNT_PER_PLAYER, shape=(GEM_COUNT,), dtype=np.int8),
+      }),
+      'buy': spaces.Dict({
+        'card': spaces.Dict({
+          'id': spaces.Text(max_length=self._CARD_ID_MAX_LENGTH),
+          'level': spaces.Discrete(CARD_LEVEL_COUNT),
+          'points': spaces.Box(low=0, high=255, shape=(1,), dtype=np.int32),
+          'bonus': spaces.Discrete(GEM_COUNT + 1),
+          'costs': spaces.Box(low=0, high=255, shape=(GEM_COUNT,), dtype=np.int32),
+        }),
+        'payment': spaces.Box(low=0, high=255, shape=(GEM_COUNT,), dtype=np.int32),
+      }),
+      'reserve': spaces.Dict({
+        'card': spaces.Dict({
+          'id': spaces.Text(max_length=self._CARD_ID_MAX_LENGTH),
+          'level': spaces.Discrete(CARD_LEVEL_COUNT),
+          'points': spaces.Box(low=0, high=255, shape=(1,), dtype=np.int32),
+          'bonus': spaces.Discrete(GEM_COUNT + 1),
+          'costs': spaces.Box(low=0, high=255, shape=(GEM_COUNT,), dtype=np.int32),
+        }),
+        'take_gold': spaces.Discrete(2),
+        'ret': spaces.Box(low=0, high=1, shape=(GEM_COUNT,), dtype=np.int8),
+      }),
+    }, seed=seed)
+
+  def empty(self) -> "ActionSpace.ActionDict":
+    return {
+      'type': np.array(0, dtype=np.int32),
+      'take3': {
+        'gems': np.zeros(GEM_COUNT, dtype=np.int8),
+        'ret': np.zeros(GEM_COUNT, dtype=np.int8),
+      },
+      'take2': {
+        'gem': np.zeros(GEM_COUNT, dtype=np.int8),
+        'count': np.array(0, dtype=np.int8),
+        'ret': np.zeros(GEM_COUNT, dtype=np.int8),
+      },
+      'buy': {
+        'card': self._zero_card_dict(),
+        'payment': np.zeros(GEM_COUNT, dtype=np.int32),
+      },
+      'reserve': {
+        'card': self._zero_card_dict(),
+        'take_gold': np.array(0, dtype=np.int8),
+        'ret': np.zeros(GEM_COUNT, dtype=np.int8),
+      },
+    }
+
+  def encode(self, action: Action) -> "ActionSpace.ActionDict":
+    data = self.empty()
+    data['type'][...] = self._type_index[action.type]
+    if action.type == ActionType.TAKE_3_DIFFERENT:
+      take3 = data['take3']
+      take3['gems'][...] = 0
+      for gem in getattr(action, 'gems', ()):  # type: ignore[attr-defined]
+        take3['gems'][GemIndex[gem]] = 1
+      take3['ret'][...] = 0
+      ret = getattr(action, 'ret', None)  # type: ignore[attr-defined]
+      if ret:
+        for gem, amount in ret:
+          take3['ret'][GemIndex[gem]] = int(amount)
+      return data
+    if action.type == ActionType.TAKE_2_SAME:
+      take2 = data['take2']
+      take2['gem'][...] = 0
+      gem = getattr(action, 'gem')  # type: ignore[attr-defined]
+      take2['gem'][GemIndex[gem]] = 1
+      count = getattr(action, 'count', 0)  # type: ignore[attr-defined]
+      take2['count'][...] = int(count)
+      take2['ret'][...] = 0
+      ret = getattr(action, 'ret', None)  # type: ignore[attr-defined]
+      if ret:
+        for gem_ret, amount in ret:
+          take2['ret'][GemIndex[gem_ret]] = int(amount)
+      return data
+    if action.type == ActionType.BUY_CARD:
+      buy = data['buy']
+      self._fill_card_dict(getattr(action, 'card'), buy['card'])  # type: ignore[attr-defined]
+      buy['payment'][...] = 0
+      for gem, amount in getattr(action, 'payment', ()):  # type: ignore[attr-defined]
+        buy['payment'][GemIndex[gem]] = int(amount)
+      return data
+    if action.type == ActionType.RESERVE_CARD:
+      reserve = data['reserve']
+      self._fill_card_dict(getattr(action, 'card'), reserve['card'])  # type: ignore[attr-defined]
+      take_gold = int(bool(getattr(action, 'take_gold', False)))  # type: ignore[attr-defined]
+      reserve['take_gold'][...] = take_gold
+      reserve['ret'][...] = 0
+      ret = getattr(action, 'ret', None)  # type: ignore[attr-defined]
+      if ret is not None:
+        reserve['ret'][GemIndex[ret]] = 1
+      return data
+    if action.type == ActionType.NOOP:
+      return data
+    raise ValueError(f"Unsupported action type: {action.type}")
+
+  def encode_many(self, actions: Sequence[Action]) -> list["ActionSpace.ActionDict"]:
+    return [self.encode(action) for action in actions]
+
+  def _zero_card_dict(self) -> "ActionSpace.CardDict":
+    return {
+      'id': "",
+      'level': np.array(0, dtype=np.int32),
+      'points': np.zeros((1,), dtype=np.int32),
+      'bonus': np.array(0, dtype=np.int32),
+      'costs': np.zeros(GEM_COUNT, dtype=np.int32),
+    }
+
+  def _fill_card_dict(self, card: Card, dest: "ActionSpace.CardDict") -> None:
+    dest['id'] = card.id
+    dest['level'][...] = max(int(card.level) - 1, 0)
+    dest['points'][0] = int(card.points)
+    bonus_index = 0
+    if card.bonus is not None:
+      bonus_index = GemIndex[card.bonus] + 1
+    dest['bonus'][...] = int(bonus_index)
+    dest['costs'][...] = 0
+    for gem, amount in card.cost:
+      dest['costs'][GemIndex[gem]] = int(amount)
 
 
 class GemEnv(gym.Env):
@@ -332,4 +507,4 @@ class GemEnv(gym.Env):
     mask[:min(n, self.max_actions)] = 1
     return mask
 
-__all__ = ["GemEnv"]
+__all__ = ["GemEnv", "StateSpace", "ActionSpace"]
