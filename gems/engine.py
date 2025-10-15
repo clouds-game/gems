@@ -67,14 +67,14 @@ class Engine:
       raise ValueError("num_players must be between 1 and 4")
     state = Engine.create_game(num_players, names)
     engine = Engine(
-        num_players=num_players,
-        names=names,
-        state=state,
-        decks_by_level={},
-        roles_deck=[],
-        rng=random.Random(),
+      num_players=num_players,
+      names=names,
+      state=state,
+      decks_by_level={},
+      roles_deck=[],
+      rng=random.Random(seed),
     )
-    engine.load_and_shuffle_assets(seed=seed)
+    engine.load_and_shuffle_assets()
     visible_cards: list[Card] = []
     for lvl in CARD_LEVELS:
       drawn = engine.draw_from_deck(lvl, CARD_VISIBLE_COUNT)
@@ -168,20 +168,19 @@ class Engine:
     cards_table = ["%3d" % len(self.decks_by_level.get(lvl, ())) + "\t".join(["  {:25}".format(str(c)) for c in self._state.visible_cards.get_level(lvl)]) for lvl in CARD_LEVELS]
     print(f"Visible cards:\n{'\n'.join([line for line in cards_table if line.strip() != '0'])}")
 
-  def load_and_shuffle_assets(self, path: str | None = None, seed: int | None = None) -> None:
+  def load_and_shuffle_assets(self, path: str | None = None) -> None:
     """Load assets from disk and shuffle them into decks on this Engine.
 
     - path: optional path to config file (falls back to package assets)
-    - seed: optional RNG seed to make shuffling deterministic
+
+    The engine's RNG (self._rng) is used for deterministic shuffling when
+    seeded at Engine construction.
     """
     cards, roles = load_assets(path)
-    rng = random.Random(seed)
-    levels, roles_list = shuffle_assets(cards, roles, rng=rng)
+    levels, roles_list = shuffle_assets(cards, roles, rng=self._rng)
     # store on instance for consumers
     self.decks_by_level = levels
     self.roles_deck = roles_list
-    # keep RNG for reproducibility if callers want to do more shuffling
-    self._rng = rng
 
   def get_deck(self, level: int) -> list[Card]:
     return list(self.decks_by_level.get(level, []))
