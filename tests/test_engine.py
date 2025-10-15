@@ -1,5 +1,7 @@
 import numpy as np
 import pytest
+from typing import cast
+from gymnasium import spaces
 
 from gems import Engine
 from gems.state import GameState
@@ -78,9 +80,14 @@ def test_gym_env_reset_shapes_and_mask():
   env = GemEnv(num_players=3, seat_id=1, max_actions=64, seed=123)
   try:
     obs, info = env.reset()
-    assert isinstance(obs, np.ndarray)
-    assert obs.shape == env.observation_space.shape
-    assert obs.dtype == np.int32
+    assert isinstance(obs, dict)
+    dict_space = cast(spaces.Dict, env.observation_space)
+    assert set(obs.keys()) == set(dict_space.spaces.keys())
+    for key, space in dict_space.spaces.items():
+      value = obs[key]
+      assert isinstance(value, np.ndarray)
+      assert value.shape == space.shape
+      assert value.dtype == np.int32
 
     assert info['max_actions'] == env.max_actions
     legal_count = info['legal_action_count']
@@ -103,7 +110,9 @@ def test_gym_env_deterministic_step_with_seed():
   try:
     obs1, info1 = env1.reset()
     obs2, info2 = env2.reset()
-    assert np.array_equal(obs1, obs2)
+    assert obs1.keys() == obs2.keys()
+    for key in obs1:
+      assert np.array_equal(obs1[key], obs2[key])
     assert info1['legal_action_count'] == info2['legal_action_count']
     assert np.array_equal(info1['action_mask'], info2['action_mask'])
 
@@ -116,7 +125,9 @@ def test_gym_env_deterministic_step_with_seed():
     obs_a, reward_a, term_a, trunc_a, info_a = step1
     obs_b, reward_b, term_b, trunc_b, info_b = step2
 
-    assert np.array_equal(obs_a, obs_b)
+    assert obs_a.keys() == obs_b.keys()
+    for key in obs_a:
+      assert np.array_equal(obs_a[key], obs_b[key])
     assert reward_a == reward_b
     assert term_a == term_b
     assert trunc_a == trunc_b
@@ -140,8 +151,12 @@ def test_gym_env_step_out_of_range_defaults_to_first_action():
     assert result is not None
     obs, reward, terminated, truncated, info = result
 
-    assert isinstance(obs, np.ndarray)
-    assert obs.shape == env.observation_space.shape
+    assert isinstance(obs, dict)
+    dict_space = cast(spaces.Dict, env.observation_space)
+    for key, space in dict_space.spaces.items():
+      value = obs[key]
+      assert isinstance(value, np.ndarray)
+      assert value.shape == space.shape
     assert isinstance(reward, float)
     assert isinstance(terminated, bool)
     assert isinstance(truncated, bool)

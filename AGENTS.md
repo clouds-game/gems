@@ -165,9 +165,12 @@ The following instruction are written by user and should be KEPT as is.
 # Python
 - TAKE CARE OF THE INDENTATION.
 - All Python code should have indentation of 2 spaces per level.
+- we don't use `if __name__ == "__main__":` or cli in our code.
+- we use `# %%` to split cells in scripts for vscode, consider it as a notebook.
+- use PEP 585 style generics, e.g. `list[int]` instead of `List[int]`. And using `collections.abc` if applicable.
+
+# General
 - You could run `uv add` to add some dependencies when needed.
 - use `runTests` provided by vscode to run the tests.
 - prefer modifying existing test cases instead of adding new ones.
-- we don't use `if __name__ == "__main__":` or cli in our code.
-- we use `# %%` to split cells in scripts for vscode, consider it as a notebook.
-- use PEP 585 style generics, e.g. `list[int]` instead of `List[int]`.
+- don't be afraid of making breaking changes, prefer doing so if it improves the code quality. remember to update all the places including tests that need to be updated.

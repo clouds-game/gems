@@ -15,8 +15,6 @@ Limitations / Simplifications:
   - Opponents are random each step (could be replaced by custom agents).
   - Rewards are shaped as delta in the controlled player's score only.
   - Truncation not currently used (always False); episode ends when engine.game_end().
-  - Complex action parameters (e.g. payments/returns) are handled by engine's
-    legal action enumeration; we just pick by index.
 
 Usage example:
   from gym_env import GemEnv
@@ -55,6 +53,64 @@ def default_reward_fn(prev_score: int, new_score: int) -> float:
   return float(new_score - prev_score)
 
 
+class StateSpace:
+  """Helper to build observations from an Engine state."""
+
+  def __init__(self, per_card_feats: int, num_players: int, visible_card_count: int):
+    self._per_card_feats = per_card_feats
+    self._num_players = num_players
+    self._visible_card_count = visible_card_count
+
+  def make_obs(self, engine: Engine | None, seat_id: int) -> dict[str, np.ndarray]:
+    bank = np.zeros(GEM_COUNT, dtype=np.int32)
+    player_gems = np.zeros(GEM_COUNT, dtype=np.int32)
+    player_discounts = np.zeros(GEM_COUNT, dtype=np.int32)
+    player_score = np.zeros(1, dtype=np.int32)
+    turn_mod_players = np.zeros(1, dtype=np.int32)
+    visible_cards = np.zeros((self._visible_card_count, self._per_card_feats), dtype=np.int32)
+    state = engine.get_state() if engine is not None else None
+    if state is None:
+      return {
+        'bank': bank,
+        'player_gems': player_gems,
+        'player_discounts': player_discounts,
+        'player_score': player_score,
+        'turn_mod_players': turn_mod_players,
+        'visible_cards': visible_cards,
+      }
+    player = state.players[seat_id]
+    for g, n in state.bank:
+      bank[GemIndex[g]] = n
+    for g, n in player.gems:
+      player_gems[GemIndex[g]] = n
+    for g, n in player.discounts:
+      player_discounts[GemIndex[g]] = n
+    player_score[0] = int(player.score)
+    turn_mod_players[0] = int(state.turn % self._num_players)
+    cards = list(state.visible_cards)
+    cards.sort(key=lambda c: (c.level, c.id))
+    limit = min(len(cards), self._visible_card_count)
+    for idx in range(limit):
+      card = cards[idx]
+      row = visible_cards[idx]
+      row[0] = int(card.level)
+      row[1] = int(card.points)
+      bonus_index = 0
+      if card.bonus is not None:
+        bonus_index = GemIndex[card.bonus] + 1
+      row[2] = int(bonus_index)
+      for gem, cost in card.cost:
+        row[3 + GemIndex[gem]] = int(cost)
+    return {
+      'bank': bank,
+      'player_gems': player_gems,
+      'player_discounts': player_discounts,
+      'player_score': player_score,
+      'turn_mod_players': turn_mod_players,
+      'visible_cards': visible_cards,
+    }
+
+
 class GemEnv(gym.Env):
   metadata = {"render_modes": ["human"], "render_fps": 4}
 
@@ -85,10 +141,21 @@ class GemEnv(gym.Env):
     # Layout (all ints):
     # bank[6] + player_gems[6] + player_discounts[6] + player_score[1] + turn_mod_players[1]
     # + visible_cards[CARD_VISIBLE_TOTAL_COUNT * per_card]
-    # per_card = level(1) + points(1) + bonus_index(1) + cost[6] = 9
-    self._per_card_feats = 9
-    self._obs_len = 6 + 6 + 6 + 1 + 1 + (CARD_VISIBLE_TOTAL_COUNT * self._per_card_feats)
-    self.observation_space = spaces.Box(low=0, high=255, shape=(self._obs_len,), dtype=np.int32)
+    # per_card = level(1) + points(1) + bonus_onehot(GEM_COUNT+1) + cost[6]
+    # bonus_onehot length = GEM_COUNT + 1 (0 index means none)
+    self._per_card_feats = 2 + (GEM_COUNT + 1) + GEM_COUNT  # level + points + bonus_onehot + cost
+    self.observation_space = spaces.Dict({
+      'bank': spaces.Box(low=0, high=255, shape=(GEM_COUNT,), dtype=np.int32),
+      'player_gems': spaces.Box(low=0, high=255, shape=(GEM_COUNT,), dtype=np.int32),
+      'player_discounts': spaces.Box(low=0, high=255, shape=(GEM_COUNT,), dtype=np.int32),
+      'player_score': spaces.Box(low=0, high=255, shape=(1,), dtype=np.int32),
+      'turn_mod_players': spaces.Box(low=0, high=255, shape=(1,), dtype=np.int32),
+      'visible_cards': spaces.Box(low=0,
+                                  high=255,
+                                  shape=(CARD_VISIBLE_TOTAL_COUNT, self._per_card_feats),
+                                  dtype=np.int32),
+    })
+    self._state_space = StateSpace(self._per_card_feats, self.num_players, CARD_VISIBLE_TOTAL_COUNT)
     # Action space: pick index into current legal actions; unused tail indices ignored
     self.action_space = spaces.Discrete(max_actions)
 
@@ -110,7 +177,7 @@ class GemEnv(gym.Env):
         opp.reset(seed=self._base_seed)
     # Fast-forward until it's our seat's turn (should be turn 0 anyway)
     self._advance_until_our_turn()
-    obs = self._make_obs()
+    obs = self._state_space.make_obs(self._engine, self.seat_id)
     info = self._info()
     return obs, info
 
@@ -119,7 +186,7 @@ class GemEnv(gym.Env):
       raise RuntimeError("Environment not reset")
     self._advance_until_our_turn()
     if self._engine is None:
-      return
+      raise RuntimeError("Environment unavailable during step")
     state = self._engine.get_state()
     player = state.players[self.seat_id]
     prev_score = player.score
@@ -145,7 +212,7 @@ class GemEnv(gym.Env):
     reward = self._reward_fn(prev_score, new_player.score)
     terminated = self._engine.game_end()
     truncated = False
-    obs = self._make_obs()
+    obs = self._state_space.make_obs(self._engine, self.seat_id)
     info = self._info()
     info['chosen_action_index'] = int(action)
     info['legal_action_count'] = len(legal)
@@ -208,60 +275,7 @@ class GemEnv(gym.Env):
       self._engine._action_history.append(chosen)
       self._engine.advance_turn()
 
-  def _make_obs(self) -> np.ndarray:
-    state = self._engine.get_state() if self._engine is not None else None
-    if state is None:
-      return np.zeros((self._obs_len,), dtype=np.int32)
-    player = state.players[self.seat_id]
-    vec: list[int] = []
-    # Bank
-    bank_counts = {g: 0 for g in Gem}
-    for g, n in state.bank:
-      bank_counts[g] = n
-    vec.extend(bank_counts[g] for g in Gem)
-    # Player gems
-    player_counts = {g: 0 for g in Gem}
-    for g, n in player.gems:
-      player_counts[g] = n
-    vec.extend(player_counts[g] for g in Gem)
-    # Player discounts
-    disc_counts = {g: 0 for g in Gem}
-    for g, n in player.discounts:
-      disc_counts[g] = n
-    vec.extend(disc_counts[g] for g in Gem)
-    # Score + turn mod players
-    vec.append(int(player.score))
-    vec.append(int(state.turn % self.num_players))
-    # Visible cards (pad to MAX_VISIBLE_TOTAL)
-    cards = list(state.visible_cards)
-    # Ensure deterministic ordering: sort by level then id
-    cards.sort(key=lambda c: (c.level, c.id))
-    if len(cards) > CARD_VISIBLE_TOTAL_COUNT:
-      cards = cards[:CARD_VISIBLE_TOTAL_COUNT]
-    per_card = self._per_card_feats
-    for c in cards:
-      bonus_index = 0
-      if c.bonus is not None:
-        bonus_index = list(Gem).index(c.bonus) + 1  # 0 means none
-      cost_counts = {g: 0 for g in Gem}
-      for g, n in c.cost:
-        cost_counts[g] = n
-      # level, points, bonus_index + cost[6]
-      vec.append(int(c.level))
-      vec.append(int(c.points))
-      vec.append(int(bonus_index))
-      vec.extend(cost_counts[g] for g in Gem)
-    # Pad remaining cards
-    remaining = CARD_VISIBLE_TOTAL_COUNT - len(cards)
-    vec.extend([0] * (remaining * per_card))
-    arr = np.array(vec, dtype=np.int32)
-    # Safety: pad/trim to expected length
-    if arr.shape[0] < self._obs_len:
-      pad = self._obs_len - arr.shape[0]
-      arr = np.concatenate([arr, np.zeros(pad, dtype=np.int32)])
-    elif arr.shape[0] > self._obs_len:
-      arr = arr[: self._obs_len]
-    return arr
+  # _make_obs removed: use StateSpace.make_obs instead
 
   def _info(self) -> dict:
     legal = self._engine.get_legal_actions(self.seat_id) if self._engine is not None else []
