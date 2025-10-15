@@ -49,6 +49,7 @@ class Engine:
       decks_by_level: dict[int, list[Card]],
       roles_deck: list[Role],
       rng: random.Random,
+      seed: int | None = None,
       all_noops_last_round: bool = False,
       action_history: list[Action] | None = None,
   ) -> None:
@@ -58,6 +59,9 @@ class Engine:
     self.decks_by_level = decks_by_level
     self.roles_deck = roles_deck
     self._rng = rng
+    # preserve the seed used to construct the RNG when available so serialized
+    # engines can be reproduced deterministically
+    self._seed = seed
     self._all_noops_last_round = all_noops_last_round
     self._action_history = list(action_history) if action_history is not None else []
 
@@ -73,6 +77,7 @@ class Engine:
       decks_by_level={},
       roles_deck=[],
       rng=random.Random(seed),
+      seed=seed,
     )
     engine.load_and_shuffle_assets()
     visible_cards: list[Card] = []
@@ -98,9 +103,53 @@ class Engine:
         decks_by_level={lvl: list(deck) for lvl, deck in self.decks_by_level.items()},
         roles_deck=list(self.roles_deck),
         rng=random.Random(seed),  # new RNG instance
+        seed=self._seed,
         all_noops_last_round=self._all_noops_last_round,
         action_history=list(self._action_history),
     )
+    return engine
+
+  def serialize(self) -> dict:
+    """Return a JSON-serializable dict describing this Engine.
+
+    The serialized form includes a minimal set of fields requested by
+    consumers/tests: number of players, player names, seed used to create
+    the RNG (if any), and the action history as a list of action dicts.
+    """
+
+    return {
+      'num_players': self._num_players,
+      'names': self._names,
+      'seed': self._seed,
+      'action_history': [a.serialize() for a in self._action_history],
+    }
+
+  @classmethod
+  def deserialize(cls, d: dict) -> "Engine":
+    """Reconstruct an Engine from a dict produced by `serialize`.
+
+    This creates a fresh Engine via `Engine.new(...)` using the stored
+    num_players/names/seed and then repopulates the `action_history`
+    with deserialized Action objects. Note: the returned Engine is a
+    fresh instance (assets shuffled using the seed) and does not replay
+    the action history against the GameState.
+    """
+    num_players = d.get('num_players')
+    if num_players is None:
+      raise ValueError("deserialize requires 'num_players' field")
+    num_players = int(num_players)
+    names = d.get('names')
+    seed = d.get('seed', None)
+    if seed is not None:
+      seed = int(seed)
+    engine = cls.new(num_players=num_players, names=names, seed=seed)
+    # keep the seed mirrored on the instance
+    engine._seed = seed
+    raw_actions = d.get('action_history', []) or []
+    actions: list[Action] = []
+    for a in raw_actions:
+      actions.append(Action.deserialize(a))
+    engine._action_history = actions
     return engine
 
   @staticmethod
