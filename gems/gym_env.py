@@ -38,18 +38,16 @@ import gymnasium as gym
 from gymnasium import spaces
 import numpy as np
 
-from gems.engine import Engine
-from gems.actions import Action
-from gems.typings import Gem
-from gems.agents.random import RandomAgent
+from gems.consts import CARD_VISIBLE_TOTAL_COUNT
+
+from .engine import Engine
+from .actions import Action
+from .typings import Gem
+from .agents.random import RandomAgent
 
 
 GemIndex = {g: i for i, g in enumerate(Gem)}  # order: enum definition order
 GEM_COUNT = len(GemIndex)
-
-MAX_VISIBLE_PER_LEVEL = 4  # engine attempts to keep 4 per level
-LEVELS = (1, 2, 3)
-MAX_VISIBLE_TOTAL = MAX_VISIBLE_PER_LEVEL * len(LEVELS)
 
 
 def default_reward_fn(prev_score: int, new_score: int) -> float:
@@ -86,10 +84,10 @@ class GemEnv(gym.Env):
     # Observation space: integer vector
     # Layout (all ints):
     # bank[6] + player_gems[6] + player_discounts[6] + player_score[1] + turn_mod_players[1]
-    # + visible_cards[MAX_VISIBLE_TOTAL * per_card]
+    # + visible_cards[CARD_VISIBLE_TOTAL_COUNT * per_card]
     # per_card = level(1) + points(1) + bonus_index(1) + cost[6] = 9
     self._per_card_feats = 9
-    self._obs_len = 6 + 6 + 6 + 1 + 1 + (MAX_VISIBLE_TOTAL * self._per_card_feats)
+    self._obs_len = 6 + 6 + 6 + 1 + 1 + (CARD_VISIBLE_TOTAL_COUNT * self._per_card_feats)
     self.observation_space = spaces.Box(low=0, high=255, shape=(self._obs_len,), dtype=np.int32)
     # Action space: pick index into current legal actions; unused tail indices ignored
     self.action_space = spaces.Discrete(max_actions)
@@ -238,8 +236,8 @@ class GemEnv(gym.Env):
     cards = list(state.visible_cards)
     # Ensure deterministic ordering: sort by level then id
     cards.sort(key=lambda c: (c.level, c.id))
-    if len(cards) > MAX_VISIBLE_TOTAL:
-      cards = cards[:MAX_VISIBLE_TOTAL]
+    if len(cards) > CARD_VISIBLE_TOTAL_COUNT:
+      cards = cards[:CARD_VISIBLE_TOTAL_COUNT]
     per_card = self._per_card_feats
     for c in cards:
       bonus_index = 0
@@ -254,7 +252,7 @@ class GemEnv(gym.Env):
       vec.append(int(bonus_index))
       vec.extend(cost_counts[g] for g in Gem)
     # Pad remaining cards
-    remaining = MAX_VISIBLE_TOTAL - len(cards)
+    remaining = CARD_VISIBLE_TOTAL_COUNT - len(cards)
     vec.extend([0] * (remaining * per_card))
     arr = np.array(vec, dtype=np.int32)
     # Safety: pad/trim to expected length
