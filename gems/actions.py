@@ -3,7 +3,7 @@ from collections.abc import Mapping
 from abc import ABC, abstractmethod
 
 from .consts import COIN_MAX_COUNT_PER_PLAYER, COIN_MIN_COUNT_TAKE2_IN_DECK
-from .typings import Gem, ActionType, GemList, Card
+from .typings import Gem, ActionType, GemList, Card, CardIdx
 from typing import cast
 from .state import PlayerState, GameState
 from .utils import _replace_tuple
@@ -28,12 +28,12 @@ class Action(ABC):
     return Take2Action.create(gem, count, ret_map=ret_map)
 
   @classmethod
-  def buy(cls, card: Card, payment: Mapping[Gem, int] | None = None, visible_idx: int | None = None, reserve_idx: int | None = None) -> 'BuyCardAction':
-    return BuyCardAction.create(card, payment=payment, visible_idx=visible_idx, reserve_idx=reserve_idx)
+  def buy(cls, card: Card | None, payment: Mapping[Gem, int] | None = None, idx: CardIdx | None = None) -> 'BuyCardAction':
+    return BuyCardAction.create(card, payment=payment, idx=idx)
 
   @classmethod
-  def reserve(cls, card: Card, take_gold: bool = True, visible_idx: int | None = None) -> 'ReserveCardAction':
-    return ReserveCardAction.create(card, take_gold=take_gold, visible_idx=visible_idx)
+  def reserve(cls, card: Card | None, take_gold: bool = True, idx: CardIdx | None = None) -> 'ReserveCardAction':
+    return ReserveCardAction.create(card, take_gold=take_gold, idx=idx)
 
   @classmethod
   def noop(cls) -> 'NoopAction':
@@ -357,40 +357,45 @@ class Take2Action(Action):
 
 @dataclass(frozen=True)
 class BuyCardAction(Action):
-  card: Card
+  idx: CardIdx | None
+  card: Card | None
   payment: GemList = field(default_factory=GemList)
-  visible_idx: int | None = None
-  reserve_idx: int | None = None
 
   @classmethod
-  def create(cls, card: Card, payment: Mapping[Gem, int] | None = None, visible_idx: int | None = None, reserve_idx: int | None = None) -> 'BuyCardAction':
+  def create(cls, card: Card | None, payment: Mapping[Gem, int] | None = None, idx: CardIdx | None = None) -> 'BuyCardAction':
     pay = GemList(dict(payment) if payment is not None else {})
-    return cls(type=ActionType.BUY_CARD, card=card, payment=pay, visible_idx=visible_idx, reserve_idx=reserve_idx)
+    return cls(type=ActionType.BUY_CARD, card=card, payment=pay, idx=idx)
 
   def __str__(self) -> str:
-    return f"Action.Buy(<{self.card.id}>, {self.payment})"
+    cid = getattr(self.card, 'id', None)
+    if self.idx is None:
+      return f"Action.Buy(<{cid}>, {self.payment})"
+    return f"Action.Buy(<{cid}>, {self.payment}, {self.idx})"
 
   def to_dict(self) -> dict:
     return {
         'type': self.type.value,
-        'card': self.card.to_dict(),
+        'card': self.card.to_dict() if self.card is not None else None,
         'payment': [(g.value, n) for g, n in self.payment],
-        'visible_idx': self.visible_idx,
-        'reserve_idx': self.reserve_idx,
+        'idx': {
+            'visible_idx': self.idx.visible_idx if self.idx is not None else None,
+            'reserve_idx': self.idx.reserve_idx if self.idx is not None else None,
+            'deck_head_level': self.idx.deck_head_level if self.idx is not None else None,
+        } if self.idx is not None else None,
     }
 
   @classmethod
   def from_dict(cls, d: dict) -> 'BuyCardAction':
     card_d = d.get('card')
-    if card_d is None:
-      raise ValueError("BuyCardAction requires a 'card' field")
-    card = Card.from_dict(card_d)
+    card = Card.from_dict(card_d) if card_d is not None else None
     pay_raw = d.get('payment', [])
     payment = {Gem(g): n for g, n in pay_raw}
-    visible_idx = d.get('visible_idx')
-    reserve_idx = d.get('reserve_idx')
-    # require indices: callers must supply either visible_idx or reserve_idx
-    return cls.create(card, payment=payment, visible_idx=visible_idx, reserve_idx=reserve_idx)
+    idx_raw = d.get('idx') or {}
+    visible_idx = idx_raw.get('visible_idx')
+    reserve_idx = idx_raw.get('reserve_idx')
+    deck_head_level = idx_raw.get('deck_head_level')
+    idx = CardIdx(visible_idx=visible_idx, reserve_idx=reserve_idx, deck_head_level=deck_head_level) if idx_raw else None
+    return cls.create(card, payment=payment, idx=idx)
 
   def _apply(self, player: PlayerState, state: GameState) -> GameState:
     # Mutable working copies
@@ -398,31 +403,33 @@ class BuyCardAction(Action):
     player_gems = dict(player.gems)
     visible_cards = list(state.visible_cards)
 
-    card = self.card
     payment = dict(getattr(self, 'payment', ()))
-    # locate card either in visible_cards using visible_idx or in player's reserved_cards using reserve_idx
-    if self.visible_idx is None and self.reserve_idx is None:
-      raise ValueError("BuyCardAction requires either visible_idx or reserve_idx")
+    # locate card according to idx
+    if self.idx is None:
+      raise ValueError("BuyCardAction requires an idx to locate the card")
     found = None
     from_reserved = False
     reserved_list: list = []
-    if self.visible_idx is not None:
-      vi = int(self.visible_idx)
+    if self.idx.visible_idx is not None:
+      vi = int(self.idx.visible_idx)
       if vi < 0 or vi >= len(visible_cards):
         raise ValueError("visible_idx out of range")
       found = visible_cards.pop(vi)
-      if found.id != card.id:
+      if self.card is not None and found.id != self.card.id:
         raise ValueError("Card at visible_idx does not match provided card")
       from_reserved = False
-    else:
-      ri = cast(int, self.reserve_idx)
+    elif self.idx.reserve_idx is not None:
+      ri = int(self.idx.reserve_idx)
       reserved_list = list(player.reserved_cards)
       if ri < 0 or ri >= len(reserved_list):
         raise ValueError("reserve_idx out of range")
       found = reserved_list.pop(ri)
-      if found.id != card.id:
+      if self.card is not None and found.id != self.card.id:
         raise ValueError("Card at reserve_idx does not match provided card")
       from_reserved = True
+    else:
+      # deck_head_level not supported for apply (would require drawing)
+      raise ValueError("deck_head_level idx is not supported for BuyCardAction.apply")
 
     # apply payment: deduct from player_gems and add to bank
     for g, amt in payment.items():
@@ -451,27 +458,29 @@ class BuyCardAction(Action):
                      last_action=self)
 
   def _check(self, player: PlayerState, state: GameState) -> bool:
-    card = self.card
-    # require indices: visible_idx or reserve_idx must be set and match
-    if self.visible_idx is None and self.reserve_idx is None:
+    # require idx to be set and match
+    if self.idx is None:
       return False
-    if self.visible_idx is not None:
-      vi = int(self.visible_idx)
+    if self.idx.visible_idx is not None:
+      vi = int(self.idx.visible_idx)
       try:
         c = state.visible_cards[vi]
       except Exception:
         return False
-      if c.id != card.id:
+      if self.card is not None and c.id != self.card.id:
         return False
-    else:
-      ri = cast(int, self.reserve_idx)
+      return player.check_afford(c, dict(self.payment))
+    if self.idx.reserve_idx is not None:
+      ri = int(self.idx.reserve_idx)
       try:
         c = player.reserved_cards[ri]
       except Exception:
         return False
-      if c.id != card.id:
+      if self.card is not None and c.id != self.card.id:
         return False
-    return player.check_afford(card, dict(self.payment))
+      return player.check_afford(c, dict(self.payment))
+    # deck_head_level can't be checked here
+    return False
 
   @classmethod
   def _get_legal_actions(cls, player: PlayerState, state: GameState) -> list["BuyCardAction"]:
@@ -481,55 +490,66 @@ class BuyCardAction(Action):
     for i, card in enumerate(state.visible_cards):
       payments = player.can_afford(card)
       for payment in payments:
-        actions.append(cls.create(card, payment=payment, visible_idx=i, reserve_idx=None))
+        idx = CardIdx(visible_idx=i)
+        actions.append(cls.create(card, payment=payment, idx=idx))
     # reserved cards with indices
     for i, card in enumerate(player.reserved_cards):
       payments = player.can_afford(card)
       for payment in payments:
-        actions.append(cls.create(card, payment=payment, visible_idx=None, reserve_idx=i))
+        idx = CardIdx(reserve_idx=i)
+        actions.append(cls.create(card, payment=payment, idx=idx))
     return actions
 
 
 @dataclass(frozen=True)
 class ReserveCardAction(Action):
-  card: Card
+  idx: CardIdx | None
+  card: Card | None
   take_gold: bool = True
   # optional single gem to return if taking gold would push player over the limit
   ret: Gem | None = None
-  visible_idx: int | None = None
 
   @classmethod
-  def create(cls, card: Card, take_gold: bool = True, ret: Gem | None = None, visible_idx: int | None = None) -> 'ReserveCardAction':
-    return cls(type=ActionType.RESERVE_CARD, card=card, take_gold=bool(take_gold), ret=ret, visible_idx=visible_idx)
+  def create(cls, card: Card | None, take_gold: bool = True, ret: Gem | None = None, idx: CardIdx | None = None) -> 'ReserveCardAction':
+    return cls(type=ActionType.RESERVE_CARD, card=card, take_gold=bool(take_gold), ret=ret, idx=idx)
 
   def __str__(self) -> str:
+    cid = getattr(self.card, 'id', None)
     ext = ""
     if self.take_gold:
       ext = f"{Gem.GOLD.color_circle()}"
       if self.ret:
         ext = f"{ext}-{self.ret.color_circle()}"
     if ext:
-      return f"Action.Reserve(<{self.card.id}>, {ext})"
-    return f"Action.Reserve(<{self.card.id}>)"
+      return f"Action.Reserve(<{cid}>, {ext})"
+    return f"Action.Reserve(<{cid}>)"
 
   def to_dict(self) -> dict:
     return {
         'type': self.type.value,
-        'card': self.card.to_dict(),
+        'card': self.card.to_dict() if self.card is not None else None,
         'take_gold': bool(self.take_gold),
         'ret': self.ret.value if self.ret is not None else None,
+        'idx': {
+            'visible_idx': self.idx.visible_idx if self.idx is not None else None,
+            'reserve_idx': self.idx.reserve_idx if self.idx is not None else None,
+            'deck_head_level': self.idx.deck_head_level if self.idx is not None else None,
+        } if self.idx is not None else None,
     }
 
   @classmethod
   def from_dict(cls, d: dict) -> 'ReserveCardAction':
     card_d = d.get('card')
-    if card_d is None:
-      raise ValueError("ReserveCardAction requires a 'card' field")
-    card = Card.from_dict(card_d)
+    card = Card.from_dict(card_d) if card_d is not None else None
     take_gold = bool(d.get('take_gold', True))
     ret_raw = d.get('ret')
     ret = Gem(ret_raw) if ret_raw is not None else None
-    return cls.create(card, take_gold=take_gold, ret=ret)
+    idx_raw = d.get('idx') or {}
+    visible_idx = idx_raw.get('visible_idx')
+    reserve_idx = idx_raw.get('reserve_idx')
+    deck_head_level = idx_raw.get('deck_head_level')
+    idx = CardIdx(visible_idx=visible_idx, reserve_idx=reserve_idx, deck_head_level=deck_head_level) if idx_raw else None
+    return cls.create(card, take_gold=take_gold, ret=ret, idx=idx)
 
   def _apply(self, player: PlayerState, state: GameState) -> GameState:
     # Mutable working copies
@@ -537,14 +557,27 @@ class ReserveCardAction(Action):
     player_gems = dict(player.gems)
     visible_cards = list(state.visible_cards)
 
-    # find card in visible_cards
+    # locate card according to idx; default to searching visible_cards if idx not provided
     found = None
-    for i, c in enumerate(visible_cards):
-      if c.id == self.card.id:
-        found = visible_cards.pop(i)
-        break
-    if found is None:
-      raise ValueError("Card to reserve not found in visible cards")
+    if self.idx is None or self.idx.visible_idx is not None:
+      # find by visible id or by scanning
+      if self.idx is not None and self.idx.visible_idx is not None:
+        vi = int(self.idx.visible_idx)
+        if vi < 0 or vi >= len(visible_cards):
+          raise ValueError("visible_idx out of range")
+        found = visible_cards.pop(vi)
+      else:
+        # fallback: scan visible_cards for matching id
+        for i, c in enumerate(visible_cards):
+          if self.card is not None and c.id == self.card.id:
+            found = visible_cards.pop(i)
+            break
+        if found is None:
+          raise ValueError("Card to reserve not found in visible cards")
+    else:
+      # reserve by idx.reserve_idx not supported for reserve.apply
+      raise ValueError("ReserveCardAction requires a visible_idx or card in apply")
+
     # give gold if requested and available
     if self.take_gold and bank.get(Gem.GOLD, 0) > 0:
       bank[Gem.GOLD] = bank.get(Gem.GOLD, 0) - 1
@@ -569,8 +602,19 @@ class ReserveCardAction(Action):
   def _check(self, player: PlayerState, state: GameState) -> bool:
     if not player.can_reserve():
       return False
-    if state.visible_cards.get(self.card.id) is None:
-      return False
+    # ensure card is visible
+    if self.idx is not None and self.idx.visible_idx is not None:
+      try:
+        c = state.visible_cards[self.idx.visible_idx]
+      except Exception:
+        return False
+      if self.card is not None and c.id != self.card.id:
+        return False
+    else:
+      if self.card is None:
+        return False
+      if state.visible_cards.get(self.card.id) is None:
+        return False
     if self.take_gold and state.bank.get(Gem.GOLD) <= 0:
       return False
 
@@ -596,7 +640,7 @@ class ReserveCardAction(Action):
     gold_in_bank = state.bank.get(Gem.GOLD)
     take_gold = gold_in_bank > 0
     total = sum(n for _, n in player.gems)
-    for card in state.visible_cards:
+    for i, card in enumerate(state.visible_cards):
       # Card must be visible to reserve; include gold token if available
       if take_gold and total + 1 > COIN_MAX_COUNT_PER_PLAYER:
         # if taking gold would exceed, enumerate possible single-gem returns
@@ -607,9 +651,11 @@ class ReserveCardAction(Action):
             continue
           if cnt <= 0:
             continue
-          actions.append(cls.create(card, take_gold=True, ret=g))
+          idx = CardIdx(visible_idx=i)
+          actions.append(cls.create(card, take_gold=True, ret=g, idx=idx))
       else:
-        actions.append(cls.create(card, take_gold=take_gold))
+        idx = CardIdx(visible_idx=i)
+        actions.append(cls.create(card, take_gold=take_gold, idx=idx))
     return actions
 
 
