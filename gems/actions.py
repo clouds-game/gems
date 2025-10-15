@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 
 from .consts import COIN_MAX_COUNT_PER_PLAYER, COIN_MIN_COUNT_TAKE2_IN_DECK
 from .typings import Gem, ActionType, GemList, Card
+from typing import cast
 from .state import PlayerState, GameState
 from .utils import _replace_tuple
 
@@ -27,12 +28,12 @@ class Action(ABC):
     return Take2Action.create(gem, count, ret_map=ret_map)
 
   @classmethod
-  def buy(cls, card: Card, payment: Mapping[Gem, int] | None = None) -> 'BuyCardAction':
-    return BuyCardAction.create(card, payment=payment)
+  def buy(cls, card: Card, payment: Mapping[Gem, int] | None = None, visible_idx: int | None = None, reserve_idx: int | None = None) -> 'BuyCardAction':
+    return BuyCardAction.create(card, payment=payment, visible_idx=visible_idx, reserve_idx=reserve_idx)
 
   @classmethod
-  def reserve(cls, card: Card, take_gold: bool = True) -> 'ReserveCardAction':
-    return ReserveCardAction.create(card, take_gold=take_gold)
+  def reserve(cls, card: Card, take_gold: bool = True, visible_idx: int | None = None) -> 'ReserveCardAction':
+    return ReserveCardAction.create(card, take_gold=take_gold, visible_idx=visible_idx)
 
   @classmethod
   def noop(cls) -> 'NoopAction':
@@ -358,11 +359,13 @@ class Take2Action(Action):
 class BuyCardAction(Action):
   card: Card
   payment: GemList = field(default_factory=GemList)
+  visible_idx: int | None = None
+  reserve_idx: int | None = None
 
   @classmethod
-  def create(cls, card: Card, payment: Mapping[Gem, int] | None = None) -> 'BuyCardAction':
+  def create(cls, card: Card, payment: Mapping[Gem, int] | None = None, visible_idx: int | None = None, reserve_idx: int | None = None) -> 'BuyCardAction':
     pay = GemList(dict(payment) if payment is not None else {})
-    return cls(type=ActionType.BUY_CARD, card=card, payment=pay)
+    return cls(type=ActionType.BUY_CARD, card=card, payment=pay, visible_idx=visible_idx, reserve_idx=reserve_idx)
 
   def __str__(self) -> str:
     return f"Action.Buy(<{self.card.id}>, {self.payment})"
@@ -371,7 +374,9 @@ class BuyCardAction(Action):
     return {
         'type': self.type.value,
         'card': self.card.to_dict(),
-        'payment': [(g.value, n) for g, n in self.payment]
+        'payment': [(g.value, n) for g, n in self.payment],
+        'visible_idx': self.visible_idx,
+        'reserve_idx': self.reserve_idx,
     }
 
   @classmethod
@@ -382,7 +387,10 @@ class BuyCardAction(Action):
     card = Card.from_dict(card_d)
     pay_raw = d.get('payment', [])
     payment = {Gem(g): n for g, n in pay_raw}
-    return cls.create(card, payment=payment)
+    visible_idx = d.get('visible_idx')
+    reserve_idx = d.get('reserve_idx')
+    # require indices: callers must supply either visible_idx or reserve_idx
+    return cls.create(card, payment=payment, visible_idx=visible_idx, reserve_idx=reserve_idx)
 
   def _apply(self, player: PlayerState, state: GameState) -> GameState:
     # Mutable working copies
@@ -392,26 +400,29 @@ class BuyCardAction(Action):
 
     card = self.card
     payment = dict(getattr(self, 'payment', ()))
-    # locate card either in visible_cards or in player's reserved_cards
+    # locate card either in visible_cards using visible_idx or in player's reserved_cards using reserve_idx
+    if self.visible_idx is None and self.reserve_idx is None:
+      raise ValueError("BuyCardAction requires either visible_idx or reserve_idx")
     found = None
     from_reserved = False
     reserved_list: list = []
-    for i, c in enumerate(visible_cards):
-      if c.id == card.id:
-        found = visible_cards.pop(i)
-        from_reserved = False
-        break
-    if found is None:
-      # check reserved
-      for i, c in enumerate(player.reserved_cards):
-        if c.id == card.id:
-          # remove from player's reserved list
-          reserved_list = list(player.reserved_cards)
-          found = reserved_list.pop(i)
-          from_reserved = True
-          break
-    if found is None:
-      raise ValueError("Card to buy not found")
+    if self.visible_idx is not None:
+      vi = int(self.visible_idx)
+      if vi < 0 or vi >= len(visible_cards):
+        raise ValueError("visible_idx out of range")
+      found = visible_cards.pop(vi)
+      if found.id != card.id:
+        raise ValueError("Card at visible_idx does not match provided card")
+      from_reserved = False
+    else:
+      ri = cast(int, self.reserve_idx)
+      reserved_list = list(player.reserved_cards)
+      if ri < 0 or ri >= len(reserved_list):
+        raise ValueError("reserve_idx out of range")
+      found = reserved_list.pop(ri)
+      if found.id != card.id:
+        raise ValueError("Card at reserve_idx does not match provided card")
+      from_reserved = True
 
     # apply payment: deduct from player_gems and add to bank
     for g, amt in payment.items():
@@ -441,19 +452,41 @@ class BuyCardAction(Action):
 
   def _check(self, player: PlayerState, state: GameState) -> bool:
     card = self.card
-    # Ensure card is either among visible or reserved
-    if state.visible_cards.get(card.id) is None and player.reserved_cards.get(card.id) is None:
+    # require indices: visible_idx or reserve_idx must be set and match
+    if self.visible_idx is None and self.reserve_idx is None:
       return False
+    if self.visible_idx is not None:
+      vi = int(self.visible_idx)
+      try:
+        c = state.visible_cards[vi]
+      except Exception:
+        return False
+      if c.id != card.id:
+        return False
+    else:
+      ri = cast(int, self.reserve_idx)
+      try:
+        c = player.reserved_cards[ri]
+      except Exception:
+        return False
+      if c.id != card.id:
+        return False
     return player.check_afford(card, dict(self.payment))
 
   @classmethod
   def _get_legal_actions(cls, player: PlayerState, state: GameState) -> list["BuyCardAction"]:
     # For each visible or reserved card, enumerate all exact payment dicts the player can afford.
     actions: list[BuyCardAction] = []
-    for card in state.visible_cards + player.reserved_cards:
+    # visible cards with indices
+    for i, card in enumerate(state.visible_cards):
       payments = player.can_afford(card)
       for payment in payments:
-        actions.append(cls.create(card, payment=payment))
+        actions.append(cls.create(card, payment=payment, visible_idx=i, reserve_idx=None))
+    # reserved cards with indices
+    for i, card in enumerate(player.reserved_cards):
+      payments = player.can_afford(card)
+      for payment in payments:
+        actions.append(cls.create(card, payment=payment, visible_idx=None, reserve_idx=i))
     return actions
 
 
@@ -463,10 +496,11 @@ class ReserveCardAction(Action):
   take_gold: bool = True
   # optional single gem to return if taking gold would push player over the limit
   ret: Gem | None = None
+  visible_idx: int | None = None
 
   @classmethod
-  def create(cls, card: Card, take_gold: bool = True, ret: Gem | None = None) -> 'ReserveCardAction':
-    return cls(type=ActionType.RESERVE_CARD, card=card, take_gold=bool(take_gold), ret=ret)
+  def create(cls, card: Card, take_gold: bool = True, ret: Gem | None = None, visible_idx: int | None = None) -> 'ReserveCardAction':
+    return cls(type=ActionType.RESERVE_CARD, card=card, take_gold=bool(take_gold), ret=ret, visible_idx=visible_idx)
 
   def __str__(self) -> str:
     ext = ""

@@ -50,7 +50,7 @@ def test_take2_apply():
 def test_reserve_apply():
   state = make_basic_state()
   card = next(iter(state.visible_cards))
-  action = ReserveCardAction.create(card, take_gold=True)
+  action = ReserveCardAction.create(card, take_gold=True, visible_idx=0)
   new_state = action.apply(state)
   p0 = new_state.players[0]
   # reserved card added
@@ -79,7 +79,7 @@ def test_buy_apply_from_visible():
   players = (p0_with_gems, state.players[1])
   state = GameState(players=players, bank=state.bank, visible_cards=state.visible_cards, turn=0)
   card = next(iter(state.visible_cards))
-  action = BuyCardAction.create(card, payment={Gem.RED: 1})
+  action = BuyCardAction.create(card, payment={Gem.RED: 1}, visible_idx=0)
   new_state = action.apply(state)
   p0n = new_state.players[0]
   assert any(getattr(c, 'id', None) == 'c1' for c in p0n.purchased_cards)

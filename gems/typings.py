@@ -187,7 +187,7 @@ class CardList:
   def __len__(self) -> int:
     return len(self._items)
 
-  def __getitem__(self, i):
+  def __getitem__(self, i) -> Card:
     return self._items[i]
 
   def as_tuple(self) -> tuple['Card', ...]:
