@@ -85,9 +85,25 @@ def test_gym_env_reset_shapes_and_mask():
     assert set(obs.keys()) == set(dict_space.spaces.keys())
     for key, space in dict_space.spaces.items():
       value = obs[key]
-      assert isinstance(value, np.ndarray)
-      assert value.shape == space.shape
-      assert value.dtype == np.int32
+      # Handle nested Dict (visible_cards)
+      if isinstance(space, spaces.Dict):
+        nested = cast(spaces.Dict, space)
+        assert isinstance(value, dict)
+        assert set(value.keys()) == set(nested.spaces.keys())
+        for nk, nspace in nested.spaces.items():
+          nval = value[nk]
+          assert isinstance(nval, np.ndarray)
+          assert nval.shape == nspace.shape
+          assert nval.dtype == np.int32
+      elif isinstance(space, spaces.Discrete):
+        # expect a 0-d numpy scalar
+        assert isinstance(value, np.ndarray)
+        assert value.shape == ()
+      else:
+        # Box and others
+        assert isinstance(value, np.ndarray)
+        assert value.shape == space.shape
+        assert value.dtype == np.int32
 
     assert info['max_actions'] == env.max_actions
     legal_count = info['legal_action_count']
@@ -112,7 +128,15 @@ def test_gym_env_deterministic_step_with_seed():
     obs2, info2 = env2.reset()
     assert obs1.keys() == obs2.keys()
     for key in obs1:
-      assert np.array_equal(obs1[key], obs2[key])
+      v1 = obs1[key]
+      v2 = obs2[key]
+      if isinstance(v1, dict) and isinstance(v2, dict):
+        for nk in v1:
+          assert np.array_equal(v1[nk], v2[nk])
+      else:
+        assert not isinstance(v1, dict)
+        assert not isinstance(v2, dict)
+        assert np.array_equal(v1, v2)
     assert info1['legal_action_count'] == info2['legal_action_count']
     assert np.array_equal(info1['action_mask'], info2['action_mask'])
 
@@ -127,7 +151,15 @@ def test_gym_env_deterministic_step_with_seed():
 
     assert obs_a.keys() == obs_b.keys()
     for key in obs_a:
-      assert np.array_equal(obs_a[key], obs_b[key])
+      v1 = obs_a[key]
+      v2 = obs_b[key]
+      if isinstance(v1, dict) and isinstance(v2, dict):
+        for nk in v1:
+          assert np.array_equal(v1[nk], v2[nk])
+      else:
+        assert not isinstance(v1, dict)
+        assert not isinstance(v2, dict)
+        assert np.array_equal(v1, v2)
     assert reward_a == reward_b
     assert term_a == term_b
     assert trunc_a == trunc_b
@@ -155,8 +187,19 @@ def test_gym_env_step_out_of_range_defaults_to_first_action():
     dict_space = cast(spaces.Dict, env.observation_space)
     for key, space in dict_space.spaces.items():
       value = obs[key]
-      assert isinstance(value, np.ndarray)
-      assert value.shape == space.shape
+      if isinstance(space, spaces.Dict):
+        nested = cast(spaces.Dict, space)
+        assert isinstance(value, dict)
+        for nk, nspace in nested.spaces.items():
+          nval = value[nk]
+          assert isinstance(nval, np.ndarray)
+          assert nval.shape == nspace.shape
+      elif isinstance(space, spaces.Discrete):
+        assert isinstance(value, np.ndarray)
+        assert value.shape == ()
+      else:
+        assert isinstance(value, np.ndarray)
+        assert value.shape == space.shape
     assert isinstance(reward, float)
     assert isinstance(terminated, bool)
     assert isinstance(truncated, bool)
