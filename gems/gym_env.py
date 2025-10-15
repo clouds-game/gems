@@ -30,7 +30,7 @@ Usage example:
 """
 from __future__ import annotations
 
-from typing import Callable, Sequence, Any
+from typing import Callable, Sequence, Any, TypedDict
 
 import gymnasium as gym
 from gymnasium import spaces
@@ -53,15 +53,50 @@ def default_reward_fn(prev_score: int, new_score: int) -> float:
   return float(new_score - prev_score)
 
 
-class StateSpace:
-  """Helper to build observations from an Engine state."""
+class StateSpace(spaces.Dict):
+  """Helper to build observations from an Engine state.
 
-  def __init__(self, per_card_feats: int, num_players: int, visible_card_count: int):
+  This class is also a gymnasium Space by wrapping an internal Dict space so
+  it can be assigned directly to `env.observation_space` while providing a
+  `make_obs(engine, seat_id)` method that produces the structured numpy
+  observation dict.
+  """
+
+  class CardDict(TypedDict):
+    level: np.ndarray  # shape (CARD_VISIBLE_TOTAL_COUNT,)
+    points: np.ndarray  # shape (CARD_VISIBLE_TOTAL_COUNT,)
+    bonus: np.ndarray  # shape (CARD_VISIBLE_TOTAL_COUNT,)  (0 == none, 1..GEM_COUNT map to GemIndex+1)
+    costs: np.ndarray  # shape (CARD_VISIBLE_TOTAL_COUNT, GEM_COUNT)
+
+  class StateDict(TypedDict):
+    bank: np.ndarray  # shape (GEM_COUNT,)
+    player_gems: np.ndarray  # shape (GEM_COUNT,)
+    player_discounts: np.ndarray  # shape (GEM_COUNT,)
+    player_score: np.ndarray  # shape (1,)
+    turn_mod_players: np.ndarray  # shape (), scalar
+    visible_cards: "StateSpace.CardDict"  # structured sub-dict
+
+  def __init__(self, per_card_feats: int, num_players: int, visible_card_count: int, *, seed = None):
+    # initialize base Space with a dummy low/high; we'll delegate to internal
     self._per_card_feats = per_card_feats
     self._num_players = num_players
     self._visible_card_count = visible_card_count
 
-  def make_obs(self, engine: Engine | None, seat_id: int):
+    super().__init__({
+      'bank': spaces.Box(low=0, high=255, shape=(GEM_COUNT,), dtype=np.int32),
+      'player_gems': spaces.Box(low=0, high=255, shape=(GEM_COUNT,), dtype=np.int32),
+      'player_discounts': spaces.Box(low=0, high=255, shape=(GEM_COUNT,), dtype=np.int32),
+      'player_score': spaces.Box(low=0, high=255, shape=(1,), dtype=np.int32),
+      'turn_mod_players': spaces.Discrete(self._num_players),
+      'visible_cards': spaces.Dict({
+        'level': spaces.Box(low=0, high=CARD_LEVEL_COUNT, shape=(CARD_VISIBLE_TOTAL_COUNT,), dtype=np.int32),
+        'points': spaces.Box(low=0, high=255, shape=(CARD_VISIBLE_TOTAL_COUNT,), dtype=np.int32),
+        'bonus': spaces.MultiDiscrete([GEM_COUNT + 1] * CARD_VISIBLE_TOTAL_COUNT),
+        'costs': spaces.Box(low=0, high=255, shape=(CARD_VISIBLE_TOTAL_COUNT, GEM_COUNT), dtype=np.int32),
+      }),
+    }, seed=seed)
+
+  def make_obs(self, engine: Engine | None, seat_id: int) -> StateDict:
     bank = np.zeros(GEM_COUNT, dtype=np.int32)
     player_gems = np.zeros(GEM_COUNT, dtype=np.int32)
     player_discounts = np.zeros(GEM_COUNT, dtype=np.int32)
@@ -158,23 +193,11 @@ class GemEnv(gym.Env):
     # + visible_cards[CARD_VISIBLE_TOTAL_COUNT * per_card]
     # per_card = level(1) + points(1) + bonus_onehot(GEM_COUNT+1) + cost[6]
     # bonus_onehot length = GEM_COUNT + 1 (0 index means none)
-    self._per_card_feats = 2 + (GEM_COUNT + 1) + GEM_COUNT  # level + points + bonus_onehot + cost
-    self.observation_space = spaces.Dict({
-      'bank': spaces.Box(low=0, high=255, shape=(GEM_COUNT,), dtype=np.int32),
-      'player_gems': spaces.Box(low=0, high=255, shape=(GEM_COUNT,), dtype=np.int32),
-      'player_discounts': spaces.Box(low=0, high=255, shape=(GEM_COUNT,), dtype=np.int32),
-      'player_score': spaces.Box(low=0, high=255, shape=(1,), dtype=np.int32),
-      # turn modulo players is a discrete value in [0, num_players-1]
-      'turn_mod_players': spaces.Discrete(self.num_players),
-      'visible_cards': spaces.Dict({
-        'level': spaces.Box(low=0, high=CARD_LEVEL_COUNT, shape=(CARD_VISIBLE_TOTAL_COUNT,), dtype=np.int32),
-        'points': spaces.Box(low=0, high=255, shape=(CARD_VISIBLE_TOTAL_COUNT,), dtype=np.int32),
-        # bonus: 0 means none, 1..GEM_COUNT map to Gem indices+1
-        'bonus': spaces.MultiDiscrete([GEM_COUNT + 1] * CARD_VISIBLE_TOTAL_COUNT),
-        'costs': spaces.Box(low=0, high=255, shape=(CARD_VISIBLE_TOTAL_COUNT, GEM_COUNT), dtype=np.int32),
-      }),
-    })
-    self._state_space = StateSpace(self._per_card_feats, self.num_players, CARD_VISIBLE_TOTAL_COUNT)
+    # per_card_feats = 2 + (GEM_COUNT + 1) + GEM_COUNT  # level + points + bonus_onehot + cost
+    # State space helper responsible for building observations and also
+    # acts as the env.observation_space (it subclasses spaces.Space).
+    self._state_space = StateSpace(2 + (GEM_COUNT + 1) + GEM_COUNT, self.num_players, CARD_VISIBLE_TOTAL_COUNT)
+    self.observation_space = self._state_space
     # Action space: pick index into current legal actions; unused tail indices ignored
     self.action_space = spaces.Discrete(max_actions)
 
