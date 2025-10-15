@@ -62,6 +62,43 @@ class Action(ABC):
 
     return self._apply(player, state)
 
+  # Serialization helpers
+  def serialize(self) -> dict:
+    """Return a JSON-serializable dict representation of this Action.
+
+    This is a thin alias for `to_dict` implemented on subclasses.
+    """
+    return self.to_dict()
+
+  @classmethod
+  def deserialize(cls, d: dict) -> 'Action':
+    """Reconstruct an Action object from a dict produced by `serialize`.
+
+    The dict must contain a 'type' key whose value is one of the
+    ActionType enum values.
+    """
+    atype = ActionType(d.get('type'))
+    if atype == ActionType.TAKE_3_DIFFERENT:
+      return Take3Action.from_dict(d)
+    if atype == ActionType.TAKE_2_SAME:
+      return Take2Action.from_dict(d)
+    if atype == ActionType.BUY_CARD:
+      return BuyCardAction.from_dict(d)
+    if atype == ActionType.RESERVE_CARD:
+      return ReserveCardAction.from_dict(d)
+    if atype == ActionType.NOOP:
+      return NoopAction.from_dict(d)
+    raise ValueError(f"Unknown action type for deserialization: {d.get('type')}")
+
+  @abstractmethod
+  def to_dict(self) -> dict:
+    """Return a JSON-serializable dict representation of this Action."""
+
+  @classmethod
+  def from_dict(cls, d: dict) -> 'Action':
+    """Reconstruct an Action from a dict. Subclasses should override."""
+    raise NotImplementedError()
+
   @abstractmethod
   def _apply(self, player: PlayerState, state: GameState) -> GameState:
     """Apply this action for the current-turn player and return a new GameState.
@@ -97,6 +134,22 @@ class Take3Action(Action):
     if self.ret:
       return f"Action.Take3({gem_str}-{self.ret})"
     return f"Action.Take3({gem_str})"
+
+  def to_dict(self) -> dict:
+    return {
+        'type': self.type.value,
+        'gems': [g.value for g in self.gems],
+        'ret': [(g.value, n) for g, n in self.ret] if self.ret else None,
+    }
+
+  @classmethod
+  def from_dict(cls, d: dict) -> 'Take3Action':
+    gems = tuple(Gem(g) for g in d.get('gems', ()))
+    ret_raw = d.get('ret')
+    ret = None
+    if ret_raw:
+      ret = {Gem(g): n for g, n in ret_raw}
+    return cls.create(*gems, ret_map=ret)
 
   def _apply(self, player: PlayerState, state: GameState) -> GameState:
     # Mutable working copies: convert GemList/tuples into mutable dicts/lists
@@ -202,6 +255,24 @@ class Take2Action(Action):
       return base[:-1] + f"-{self.ret})"
     return base
 
+  def to_dict(self) -> dict:
+    return {
+        'type': self.type.value,
+        'gem': self.gem.value,
+        'count': self.count,
+        'ret': [(g.value, n) for g, n in self.ret] if self.ret else None,
+    }
+
+  @classmethod
+  def from_dict(cls, d: dict) -> 'Take2Action':
+    gem = Gem(d.get('gem'))
+    count = int(d.get('count', 2))
+    ret_raw = d.get('ret')
+    ret = None
+    if ret_raw:
+      ret = {Gem(g): n for g, n in ret_raw}
+    return cls.create(gem, count, ret_map=ret)
+
   def _apply(self, player: PlayerState, state: GameState) -> GameState:
     # Mutable working copies: convert GemList/tuples into mutable dicts/lists
     bank = dict(state.bank)
@@ -296,6 +367,23 @@ class BuyCardAction(Action):
   def __str__(self) -> str:
     return f"Action.Buy(<{self.card.id}>, {self.payment})"
 
+  def to_dict(self) -> dict:
+    return {
+        'type': self.type.value,
+        'card': self.card.to_dict(),
+        'payment': [(g.value, n) for g, n in self.payment]
+    }
+
+  @classmethod
+  def from_dict(cls, d: dict) -> 'BuyCardAction':
+    card_d = d.get('card')
+    if card_d is None:
+      raise ValueError("BuyCardAction requires a 'card' field")
+    card = Card.from_dict(card_d)
+    pay_raw = d.get('payment', [])
+    payment = {Gem(g): n for g, n in pay_raw}
+    return cls.create(card, payment=payment)
+
   def _apply(self, player: PlayerState, state: GameState) -> GameState:
     # Mutable working copies
     bank = dict(state.bank)
@@ -383,6 +471,22 @@ class ReserveCardAction(Action):
       return f"Action.Reserve(<{self.card.id}>, {Gem.GOLD.color_circle()})"
     return f"Action.Reserve(<{self.card.id}>)"
 
+  def to_dict(self) -> dict:
+    return {
+        'type': self.type.value,
+        'card': self.card.to_dict(),
+        'take_gold': bool(self.take_gold),
+    }
+
+  @classmethod
+  def from_dict(cls, d: dict) -> 'ReserveCardAction':
+    card_d = d.get('card')
+    if card_d is None:
+      raise ValueError("ReserveCardAction requires a 'card' field")
+    card = Card.from_dict(card_d)
+    take_gold = bool(d.get('take_gold', True))
+    return cls.create(card, take_gold=take_gold)
+
   def _apply(self, player: PlayerState, state: GameState) -> GameState:
     # Mutable working copies
     bank = dict(state.bank)
@@ -448,6 +552,13 @@ class NoopAction(Action):
 
   def __str__(self) -> str:  # pragma: no cover - trivial
     return "Action.Noop()"
+
+  def to_dict(self) -> dict:  # pragma: no cover - trivial
+    return {'type': self.type.value}
+
+  @classmethod
+  def from_dict(cls, d: dict) -> 'NoopAction':  # pragma: no cover - trivial
+    return cls.create()
 
   def _apply(self, player: PlayerState, state: GameState) -> GameState:
     # simply return a new GameState with last_action set (do not modify turn)

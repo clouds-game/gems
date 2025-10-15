@@ -71,3 +71,24 @@ def test_action_constructors_basic():
   assert a6.ret is not None
   assert a6.ret.to_dict() == {Gem.RED: 1}
   assert str(a6) == "Action.Take2(2⚪-1🔴)"
+
+
+def test_action_serialize_roundtrip():
+  # create a variety of actions and ensure serialize->deserialize roundtrips
+  card1 = Card(id='card-serialize-1', level=2, cost_in={Gem.BLACK: 1, Gem.GREEN: 2}, points=1, bonus=Gem.BLUE)
+
+  actions = [
+    Action.noop(),
+    Action.take3(Gem.RED, Gem.BLUE, Gem.GREEN),
+    Action.take2(Gem.WHITE),
+    Action.buy(card1, payment={Gem.BLACK: 1, Gem.GOLD: 1}),
+    Action.reserve(card1, take_gold=False),
+    Action.take3(Gem.RED, Gem.BLUE, Gem.GREEN, ret_map={Gem.WHITE: 2}),
+    Action.take2(Gem.WHITE, ret_map={Gem.RED: 1}),
+  ]
+
+  for a in actions:
+    d = a.serialize()
+    b = Action.deserialize(d)
+    # compare serialized forms to avoid relying on object equality (GemList has no eq)
+    assert b.serialize() == d
