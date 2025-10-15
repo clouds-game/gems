@@ -80,6 +80,10 @@ class GemList:
     normalized_pairs = tuple((g, counts[g]) for g in self.COLOR_ORDER if counts.get(g, 0) > 0)
     return GemList(normalized_pairs)
 
+  def count(self) -> int:
+    """Return the total count of all gems in this GemList."""
+    return sum(self._pairs.values())
+
   def get(self, gem: Gem) -> int:
     return self._pairs.get(gem, 0)
 
