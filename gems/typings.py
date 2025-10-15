@@ -230,6 +230,29 @@ class CardList:
 
 
 @dataclass(frozen=True)
+class CardIdx:
+  """Represents an index referring to a card location.
+
+  Exactly one of the following should be non-None:
+  - `visible_idx`: index into the public visible cards (int)
+  - `reserve_idx`: index into a player's reserved cards (int)
+  - `deck_head_level`: a tuple (level:int) indicating the top card of the deck for that level
+
+  The class validates on construction that exactly one of the three is provided.
+  """
+  visible_idx: int | None = None
+  reserve_idx: int | None = None
+  deck_head_level: int | None = None
+
+  def __post_init__(self):
+    # enforce exactly one non-null field
+    vals = (self.visible_idx, self.reserve_idx, self.deck_head_level)
+    non_null = sum(1 for v in vals if v is not None)
+    if non_null != 1:
+      raise ValueError("CardIdx requires exactly one of visible_idx, reserve_idx, deck_head_level to be set")
+
+
+@dataclass(frozen=True)
 class Role:
   """Represents a special role/noble with requirements and point reward.
 
