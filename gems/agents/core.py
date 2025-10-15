@@ -5,6 +5,7 @@ All Python code in this repo uses 2-space indentation.
 """
 import random
 from collections.abc import Sequence
+from typing import TypeVar
 
 from ..state import PlayerState, GameState
 from ..actions import Action
@@ -36,5 +37,5 @@ class Agent:
     """
     raise NotImplementedError()
 
-
-__all__ = ["Agent"]
+BaseAgent = TypeVar('BaseAgent', bound=Agent)
+__all__ = ["Agent", "BaseAgent"]

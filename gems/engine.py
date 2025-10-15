@@ -11,7 +11,7 @@ entrypoint.
 from typing import TypeVar
 from collections.abc import Sequence
 
-from .agents.core import Agent
+from .agents.core import Agent, BaseAgent
 from .consts import CARD_LEVELS, COIN_DEFAULT_INIT, COIN_GOLD_INIT, DEFAULT_PLAYERS, CARD_VISIBLE_COUNT
 
 from .typings import ActionType, Gem, Card, Role
@@ -19,8 +19,6 @@ from .state import PlayerState, GameState
 from .actions import Action
 from pathlib import Path
 import random
-
-BaseAgent = TypeVar('BaseAgent', bound=Agent)
 
 
 class Engine:
