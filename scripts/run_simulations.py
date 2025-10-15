@@ -145,9 +145,13 @@ def average_score_lists(score_lists: list[list[int]]) -> list[float]:
 
 
 # %%
-score_lists = get_score_lists(GreedyAgentFile)
-average_scores = average_score_lists(score_lists)
-plot_score_lists(score_lists)
-plot_score_lists([average_scores], labels=["Greedy"])
+greedy_score_lists = get_score_lists(GreedyAgentFile)
+greedy_average_scores = average_score_lists(greedy_score_lists)
+
+random_score_lists = get_score_lists(RandomAgentFile)
+random_average_scores = average_score_lists(random_score_lists)
+plot_score_lists(greedy_score_lists)
+plot_score_lists(random_score_lists)
+plot_score_lists([greedy_average_scores, random_average_scores], labels=["Greedy", "Random"])
 
 # %%

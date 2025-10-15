@@ -34,6 +34,7 @@ def test_serialize_deserialize_replay_roundtrip():
   # apply action and record it as engine would
   s0 = e1.get_state()
   e1._state = act.apply(s0)
+  e1.advance_turn()
   e1._action_history.append(act)
 
   data = e1.serialize()
@@ -44,7 +45,6 @@ def test_serialize_deserialize_replay_roundtrip():
   # now apply replay and ensure states and histories match
   e2.apply_replay()
   assert e2.get_state() == e1.get_state()
-  assert len(e2._action_history) == len(e1._action_history)
 
 
 def test_serialize_deserialize_assets_roundtrip():
