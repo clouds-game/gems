@@ -2,7 +2,7 @@ import math
 import pytest
 from gems import Engine
 from gems.actions import Action, Take2Action
-from gems.consts import CARD_LEVELS, CARD_VISIBLE_COUNT
+from gems.consts import CARD_LEVELS, CARD_VISIBLE_COUNT, COIN_MAX_COUNT_PER_PLAYER
 from gems.typings import ActionType, Gem, Card, GemList
 from gems.state import PlayerState, GameState
 
@@ -339,3 +339,40 @@ def test_initial_state_has_no_illegal_actions():
     except Exception:
       illegal.append(a)
   assert len(illegal) == 0, f"Found illegal actions in initial state: {illegal}"
+
+
+def test_reserve_with_return_enumerated_and_apply():
+  # player has 10 gems; reserving with gold would push to 11 so must return 1
+  from gems.actions import ReserveCardAction
+
+  e = Engine.new(2)
+  card = Card(id='res-ret', cost_in=[])
+  # player has 10 gems: 5 red, 5 blue
+  p0 = PlayerState(seat_id=0, gems=GemList(((Gem.RED, 5), (Gem.BLUE, 5))))
+  p1 = PlayerState(seat_id=1, gems=GemList(()))
+  state = GameState(players=(p0, p1), bank=e.get_state().bank, visible_cards_in=(card,), turn=0)
+  e._state = state
+
+  actions = e.get_legal_actions(seat_id=0)
+  reserve_actions = [a for a in actions if a.type == ActionType.RESERVE_CARD]
+  # Expect at least one reserve action that specifies a returned gem
+  with_ret = [a for a in reserve_actions if getattr(a, 'ret', None)]
+  assert len(with_ret) == 2
+
+  chosen = with_ret[0]
+  assert isinstance(chosen, ReserveCardAction)
+  assert chosen.ret is not None
+
+  orig_count = dict(p0.gems).get(chosen.ret, 0)
+  assert orig_count > 0
+
+  new_state = chosen.apply(state)
+  new_p0 = new_state.players[0]
+  # player's total gems must remain at max (10)
+  assert sum(n for _, n in new_p0.gems) == COIN_MAX_COUNT_PER_PLAYER
+  # returned gem count decreased by 1
+  assert dict(new_p0.gems).get(chosen.ret, 0) == orig_count - 1
+  # player gained a gold token
+  assert dict(new_p0.gems).get(Gem.GOLD, 0) == 1
+  # bank gained the returned token
+  assert dict(new_state.bank).get(chosen.ret, 0) == dict(state.bank).get(chosen.ret, 0) + 1

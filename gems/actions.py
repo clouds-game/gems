@@ -461,14 +461,21 @@ class BuyCardAction(Action):
 class ReserveCardAction(Action):
   card: Card
   take_gold: bool = True
+  # optional single gem to return if taking gold would push player over the limit
+  ret: Gem | None = None
 
   @classmethod
-  def create(cls, card: Card, take_gold: bool = True) -> 'ReserveCardAction':
-    return cls(type=ActionType.RESERVE_CARD, card=card, take_gold=bool(take_gold))
+  def create(cls, card: Card, take_gold: bool = True, ret: Gem | None = None) -> 'ReserveCardAction':
+    return cls(type=ActionType.RESERVE_CARD, card=card, take_gold=bool(take_gold), ret=ret)
 
   def __str__(self) -> str:
+    ext = ""
     if self.take_gold:
-      return f"Action.Reserve(<{self.card.id}>, {Gem.GOLD.color_circle()})"
+      ext = f"{Gem.GOLD.color_circle()}"
+      if self.ret:
+        ext = f"{ext}-{self.ret.color_circle()}"
+    if ext:
+      return f"Action.Reserve(<{self.card.id}>, {ext})"
     return f"Action.Reserve(<{self.card.id}>)"
 
   def to_dict(self) -> dict:
@@ -476,6 +483,7 @@ class ReserveCardAction(Action):
         'type': self.type.value,
         'card': self.card.to_dict(),
         'take_gold': bool(self.take_gold),
+        'ret': self.ret.value if self.ret is not None else None,
     }
 
   @classmethod
@@ -485,7 +493,9 @@ class ReserveCardAction(Action):
       raise ValueError("ReserveCardAction requires a 'card' field")
     card = Card.from_dict(card_d)
     take_gold = bool(d.get('take_gold', True))
-    return cls.create(card, take_gold=take_gold)
+    ret_raw = d.get('ret')
+    ret = Gem(ret_raw) if ret_raw is not None else None
+    return cls.create(card, take_gold=take_gold, ret=ret)
 
   def _apply(self, player: PlayerState, state: GameState) -> GameState:
     # Mutable working copies
@@ -493,7 +503,6 @@ class ReserveCardAction(Action):
     player_gems = dict(player.gems)
     visible_cards = list(state.visible_cards)
 
-    take_gold = getattr(self, 'take_gold', True)
     # find card in visible_cards
     found = None
     for i, c in enumerate(visible_cards):
@@ -503,9 +512,12 @@ class ReserveCardAction(Action):
     if found is None:
       raise ValueError("Card to reserve not found in visible cards")
     # give gold if requested and available
-    if take_gold and bank.get(Gem.GOLD, 0) > 0:
+    if self.take_gold and bank.get(Gem.GOLD, 0) > 0:
       bank[Gem.GOLD] = bank.get(Gem.GOLD, 0) - 1
       player_gems[Gem.GOLD] = player_gems.get(Gem.GOLD, 0) + 1
+    if self.ret:
+      bank[self.ret] = bank.get(self.ret, 0) + 1
+      player_gems[self.ret] = player_gems.get(self.ret, 0) - 1
     # create new player with reserved card added
     new_reserved = tuple(player.reserved_cards) + (found,)
     if len(new_reserved) > 3:
@@ -527,6 +539,19 @@ class ReserveCardAction(Action):
       return False
     if self.take_gold and state.bank.get(Gem.GOLD) <= 0:
       return False
+
+    if self.ret:
+      if not self.take_gold:
+        return False
+      if self.ret == Gem.GOLD:
+        return False
+      if player.gems.get(self.ret) <= 0:
+        return False
+
+      total = sum(n for _, n in player.gems)
+      if total != COIN_MAX_COUNT_PER_PLAYER:
+        return False
+
     return True
 
   @classmethod
@@ -536,9 +561,21 @@ class ReserveCardAction(Action):
       return actions
     gold_in_bank = state.bank.get(Gem.GOLD)
     take_gold = gold_in_bank > 0
+    total = sum(n for _, n in player.gems)
     for card in state.visible_cards:
       # Card must be visible to reserve; include gold token if available
-      actions.append(cls.create(card, take_gold=take_gold))
+      if take_gold and total + 1 > COIN_MAX_COUNT_PER_PLAYER:
+        # if taking gold would exceed, enumerate possible single-gem returns
+
+        # enumerate distinct gems the player can return (exclude gold)
+        for g, cnt in player.gems:
+          if g == Gem.GOLD:
+            continue
+          if cnt <= 0:
+            continue
+          actions.append(cls.create(card, take_gold=True, ret=g))
+      else:
+        actions.append(cls.create(card, take_gold=take_gold))
     return actions
 
 
