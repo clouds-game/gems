@@ -90,7 +90,7 @@ class Engine:
     engine._action_history = []
     return engine
 
-  def clone(self, seed=None) -> "Engine":
+  def clone(self, seed: int | None = None) -> "Engine":
     engine = Engine(
         num_players=self._num_players,
         names=self._names,
