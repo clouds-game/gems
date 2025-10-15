@@ -144,8 +144,6 @@ class Engine:
     if seed is not None:
       seed = int(seed)
     engine = cls.new(num_players=num_players, names=names, seed=seed)
-    # keep the seed mirrored on the instance
-    engine._seed = seed
     raw_actions = d.get('action_history', []) or []
     actions: list[Action] = []
     for a in raw_actions:
@@ -170,6 +168,7 @@ class Engine:
       state_before = self._state
       self._state = action.apply(state_before)
       self._action_history.append(action)
+      self.advance_turn()
     # clear replay buffer
     self._actions_to_replay = []
 
