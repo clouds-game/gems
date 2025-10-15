@@ -40,6 +40,8 @@ class Engine:
   decks_by_level: dict[int, list[Card]]
   roles_deck: list[Role]
   _rng: random.Random
+  _action_history: list[Action]
+  _actions_to_replay: list[Action]
   def __init__(
       self,
       *,
@@ -64,6 +66,7 @@ class Engine:
     self._seed = seed
     self._all_noops_last_round = all_noops_last_round
     self._action_history = list(action_history) if action_history is not None else []
+    self._actions_to_replay = []
 
   @staticmethod
   def new(num_players: int = DEFAULT_PLAYERS, names: list[str] | None = None, seed: int | None = None) -> "Engine":
@@ -149,8 +152,28 @@ class Engine:
     actions: list[Action] = []
     for a in raw_actions:
       actions.append(Action.deserialize(a))
-    engine._action_history = actions
+    # store as actions needing replay; caller may choose to call apply_replay()
+    engine._actions_to_replay = actions
     return engine
+
+  def apply_replay(self) -> None:
+    """Apply any deserialized actions stored in `_actions_to_replay`.
+
+    Actions are applied in order to the current GameState using
+    Action.apply(...). Each successfully-applied action is appended to
+    `_action_history`. After application the `_actions_to_replay` list is
+    cleared.
+
+    Raises ValueError if any action cannot be applied for the current
+    state/player.
+    """
+    for action in list(self._actions_to_replay):
+      # validate and apply
+      state_before = self._state
+      self._state = action.apply(state_before)
+      self._action_history.append(action)
+    # clear replay buffer
+    self._actions_to_replay = []
 
   @staticmethod
   def create_game(num_players: int = DEFAULT_PLAYERS, names: list[str] | None = None) -> GameState:
