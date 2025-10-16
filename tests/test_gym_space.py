@@ -115,3 +115,59 @@ def test_action_space_encode_decode_roundtrip():
     assert isinstance(dec, Action)
     assert dec.type == a.type
     assert dec == a
+
+
+def test_state_space_obs():
+  # build a deterministic engine and set a small custom state
+  from gems.engine import Engine
+  from gems.typings import Card
+  from gems.state import PlayerState, GameState
+
+  engine = Engine.new(num_players=2, seed=123)
+  # construct a visible card with a bonus and costs
+  cards = [
+    Card(id='c1', level=1, points=2, bonus=Gem.BLACK, cost_in=[(Gem.RED, 1), (Gem.BLUE, 2)]),
+    Card(id='c2', level=2, points=3, bonus=None, cost_in=[(Gem.WHITE, 1)]),
+  ]
+
+  # bank and player gems mapping
+  bank = {g: 5 for g in Gem}
+  bank[Gem.GOLD] = 2
+
+  # player 0 has some gems and a purchased card that grants a discount (bonus)
+  p0 = PlayerState(seat_id=0, name='A', gems_in={Gem.RED: 1, Gem.BLUE: 0, Gem.GOLD: 1}, score=7,
+                   reserved_cards_in=(), purchased_cards_in=(cards[0],))
+  # player 1 default
+  p1 = engine.get_state().players[1]
+
+  new_state = GameState(players=(p0, p1), bank_in=bank, visible_cards_in=cards, turn=3)
+  engine._state = new_state
+
+  ss = StateSpace(per_card_feats=2 + (len(Gem) + 1) + len(Gem), num_players=2, visible_card_count=8)
+  obs = ss.make_obs(engine, seat_id=0)
+
+  # bank vector checks (same Gem order as enum)
+  expected_bank = np.array([bank[g] for g in Gem], dtype=np.int32)
+  assert np.array_equal(obs['bank'], expected_bank)
+
+  # player gems and score
+  expected_player_gems = np.array([p0.gems.get(g) for g in Gem], dtype=np.int32)
+  assert np.array_equal(obs['player_gems'], expected_player_gems)
+  assert int(obs['player_score'][0]) == p0.score
+
+  # visible cards: first two positions populated, rest zeros
+  vc = obs['visible_cards']
+  # levels are stored as level-1
+  for i, c in enumerate(cards):
+    assert int(vc['level'][i]) == c.level - 1
+    assert int(vc['points'][i]) == c.points
+    # bonus encoded as GemIndex+1 (0 == none)
+    gem_order = list(Gem)
+    # c1.bonus is set above; cast to Gem for typing
+    bonus_index = gem_order.index(cast(Gem, c.bonus)) + 1 if c.bonus is not None else 0
+    assert int(vc['bonus'][i]) == bonus_index
+    # costs matrix
+    # find index positions for gems
+    for g, amt in c.cost:
+      gi = gem_order.index(g)
+      assert int(vc['costs'][i, gi]) == amt
