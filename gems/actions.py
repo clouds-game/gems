@@ -28,7 +28,7 @@ class Action(ABC):
     return Take2Action.create(gem, count, ret_map=ret_map)
 
   @classmethod
-  def buy(cls, card: Card, payment: Mapping[Gem, int] | None = None, visible_idx: int | None = None, reserve_idx: int | None = None) -> 'BuyCardAction':
+  def buy(cls, card: Card | None, payment: Mapping[Gem, int] | None = None, visible_idx: int | None = None, reserve_idx: int | None = None) -> 'BuyCardAction':
     # maintain friendly legacy signature: build CardIdx from provided indices
     idx = None
     if visible_idx is not None or reserve_idx is not None:
@@ -38,7 +38,7 @@ class Action(ABC):
     return BuyCardAction.create(idx, card, payment=payment)
 
   @classmethod
-  def reserve(cls, card: Card, take_gold: bool = True, visible_idx: int | None = None) -> 'ReserveCardAction':
+  def reserve(cls, card: Card | None, take_gold: bool = True, visible_idx: int | None = None) -> 'ReserveCardAction':
     idx = CardIdx(visible_idx=visible_idx) if visible_idx is not None else None
     if idx is None:
       raise ValueError("Must provide visible_idx to identify card to reserve")

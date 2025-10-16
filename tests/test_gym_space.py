@@ -34,7 +34,16 @@ def test_state_space_empty_obs_shapes():
 def test_action_space_encode_decode_roundtrip():
   aspace = ActionSpace()
   # noop
-  a = Action.noop()
-  enc = aspace.encode(a)
-  dec = aspace.decode(enc)
-  assert dec.type == a.type
+  action_list = [
+    Action.take3(Gem.RED, Gem.BLUE, Gem.GREEN),
+    Action.take2(Gem.WHITE),
+    Action.buy(card=None, visible_idx=0, payment={Gem.BLACK: 1, Gem.GREEN: 1}),
+    Action.reserve(card=None, visible_idx=1, take_gold=True),
+    Action.noop(),
+  ]
+  for a in action_list:
+    enc = aspace.encode(a)
+    dec = aspace.decode(enc)
+    assert isinstance(dec, Action)
+    assert dec.type == a.type
+    assert dec == a
