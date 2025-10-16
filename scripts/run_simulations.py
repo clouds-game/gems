@@ -1,4 +1,5 @@
 # %%
+from tqdm import tqdm
 from _common import RES_DIR
 
 import json
@@ -12,8 +13,8 @@ import matplotlib.pyplot as plt
 # %%
 
 Simulation_Dir = RES_DIR / "simulations"
-RandomAgentFile = Simulation_Dir / "RandomAgent.json"
-GreedyAgentFile = Simulation_Dir / "GreedyAgent.json"
+RandomAgentFile = Simulation_Dir / "RandomAgent.jsonl"
+GreedyAgentFile = Simulation_Dir / "GreedyAgent.jsonl"
 
 
 def run_simulations(n: int, agents: list[BaseAgent]) -> list[Engine]:
@@ -24,24 +25,26 @@ def run_simulations(n: int, agents: list[BaseAgent]) -> list[Engine]:
 
   num_players = len(agents)
   engines = []
-  for i in range(n):
-    seed = i
+  for i in tqdm(range(n), desc="Running simulations"):
+    seed = 1234 + i
     engine = Engine.new(num_players=num_players, seed=seed)
     while not engine.game_end():
-      engine.play_one_round(agents=agents)
+      engine.play_one_round(agents=agents, debug=False)
     engines.append(engine)
   return engines
 
 
 def save_engines(engines: list[Engine], output_file: Path):
   output_file.parent.mkdir(parents=True, exist_ok=True)
-  with open(output_file, "w", encoding="utf-8") as f:
-    json.dump([e.serialize() for e in engines], f, indent=2)
+  with open(output_file, "a", encoding="utf-8") as f:
+    for e in engines:
+      json.dump(e.serialize(), f, ensure_ascii=False)
+      f.write("\n")
 
 
 def load_engines(input_file: Path) -> list[Engine]:
   with open(input_file, "r", encoding="utf-8") as f:
-    engines_data = json.load(f)
+    engines_data = [json.loads(line) for line in f]
   return [Engine.deserialize(data) for data in engines_data]
 
 # %%
@@ -79,8 +82,7 @@ def _display_cards(engine: Engine):
 def get_score_lists(path: Path):
   engines = load_engines(path)
   score_lists: list[list[int]] = []
-  for i, engine in enumerate(engines):
-    print(f"Replaying game {i + 1}/{len(engines)}")
+  for engine in tqdm(engines, desc="replay game"):
     scores: list[int] = []
     for action in engine._actions_to_replay:
       state_before = engine.get_state()
@@ -93,6 +95,7 @@ def get_score_lists(path: Path):
   return score_lists
 # %%
 # play_and_save(5, GreedyAgent)
+# play_and_save(5, RandomAgent)
 
 
 # %%
