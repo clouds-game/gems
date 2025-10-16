@@ -472,8 +472,10 @@ class GemEnv(gym.Env):
     # acts as the env.observation_space (it subclasses spaces.Space).
     self._state_space = StateSpace(2 + (GEM_COUNT + 1) + GEM_COUNT, self.num_players, CARD_VISIBLE_TOTAL_COUNT)
     self.observation_space = self._state_space
-    # Action space: pick index into current legal actions; unused tail indices ignored
-    self.action_space = spaces.Discrete(max_actions)
+    # Action space: structured ActionSpace that encodes Action objects
+    # Keep `max_actions` for action_mask sizing but the actual gym action
+    # is the structured dict produced by `ActionSpace.encode`/expected by agents.
+    self.action_space = ActionSpace(seed=self._base_seed)
 
   # Gymnasium API -------------------------------------------------
   def seed(self, seed: int | None = None):  # pragma: no cover - compatibility
@@ -497,7 +499,7 @@ class GemEnv(gym.Env):
     info = self._info()
     return obs, info
 
-  def step(self, action: int):
+  def step(self, action: Any):
     if self._engine is None:
       raise RuntimeError("Environment not reset")
     self._advance_until_our_turn()
@@ -511,11 +513,36 @@ class GemEnv(gym.Env):
     if not legal:
       # Should not happen (noop fallback exists) but guard anyway
       raise RuntimeError("No legal actions available for current player")
-    # Map incoming discrete action index into legal list
-    if action < 0 or action >= len(legal):
-      chosen = legal[0]
+    chosen = None
+    chosen_index = None
+    # Accept integer index (legacy), Action objects, or structured action dicts
+    if isinstance(action, int):
+      chosen_index = int(action)
+      if action < 0 or action >= len(legal):
+        chosen = legal[0]
+      else:
+        chosen = legal[int(action)]
+    elif isinstance(action, dict):
+      # structured ActionSpace encoding provided by agent
+      chosen = self.action_space.decode(action)  # may raise
+      # find matching legal action (by equality)
+      try:
+        chosen_index = legal.index(chosen)
+      except ValueError:
+        chosen_index = -1
+        chosen = legal[0]
     else:
-      chosen = legal[action]
+      # assume it's an Action instance
+      if isinstance(action, Action):
+        chosen = action
+        try:
+          chosen_index = legal.index(chosen)
+        except ValueError:
+          chosen_index = -1
+      else:
+        # unknown type: fallback to first legal action
+        chosen = legal[0]
+        chosen_index = -1
     # Apply chosen action
     new_state = chosen.apply(state)
     self._engine._state = new_state  # internal update (engine is thin wrapper)
@@ -530,7 +557,8 @@ class GemEnv(gym.Env):
     truncated = False
     obs = self._state_space.make_obs(self._engine, self.seat_id)
     info = self._info()
-    info['chosen_action_index'] = int(action)
+    # record the original form when possible; use chosen_index computed above
+    info['chosen_action_index'] = int(chosen_index) if chosen_index is not None else -1
     info['legal_action_count'] = len(legal)
     info['action_applied_type'] = chosen.type.value
     return obs, reward, terminated, truncated, info
