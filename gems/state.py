@@ -2,7 +2,8 @@ from dataclasses import InitVar, dataclass, field
 from collections.abc import Iterable, Mapping
 from typing import TYPE_CHECKING
 
-from .consts import CARD_MAX_COUNT_RESERVED
+from gems.consts import GameConfig
+
 from .typings import Gem, GemList, Card, CardList, Role
 
 if TYPE_CHECKING:
@@ -110,9 +111,9 @@ class PlayerState:
 
     return payments
 
-  def can_reserve(self) -> bool:
+  def can_reserve(self, config: GameConfig) -> bool:
     """Return whether this player can reserve another card."""
-    return len(self.reserved_cards) < CARD_MAX_COUNT_RESERVED
+    return len(self.reserved_cards) < config.card_max_count_reserved
 
   def get_legal_actions(self, state: "GameState") -> list["Action"]:
     from .actions import (
@@ -129,12 +130,13 @@ class PlayerState:
     logic is co-located with the action definitions. Falls back to a
     single NoopAction if no actions are available.
     """
+    config = state.config
     actions: list[Action] = []
     # Gather from each action type
-    actions.extend(Take3Action._get_legal_actions(self, state))
-    actions.extend(Take2Action._get_legal_actions(self, state))
-    actions.extend(BuyCardAction._get_legal_actions(self, state))
-    actions.extend(ReserveCardAction._get_legal_actions(self, state))
+    actions.extend(Take3Action._get_legal_actions(self, state, config))
+    actions.extend(Take2Action._get_legal_actions(self, state, config))
+    actions.extend(BuyCardAction._get_legal_actions(self, state, config))
+    actions.extend(ReserveCardAction._get_legal_actions(self, state, config))
     # Fallback
     if not actions:
       return [Action.noop()]
@@ -148,6 +150,7 @@ class GameState:
   Fields are converted to immutable tuples so agents can safely treat the
   object as read-only.
   """
+  config: GameConfig
   players: tuple["PlayerState", ...]
   # bank is represented as an immutable tuple of (resource, amount).
   bank_in: InitVar[Iterable[tuple[Gem, int]] | Mapping[Gem, int] | GemList | None] = None
@@ -206,6 +209,6 @@ class GameState:
           visible.append(deck.pop())
 
     # Return a new GameState with incremented turn and updated visible_cards
-    return GameState(players=self.players, bank=self.bank,
+    return GameState(config=self.config, players=self.players, bank=self.bank,
                      visible_cards_in=visible, turn=self.turn + 1,
                      last_action=self.last_action)

@@ -36,13 +36,12 @@ import gymnasium as gym
 from gymnasium import spaces
 import numpy as np
 
-from gems.consts import CARD_VISIBLE_TOTAL_COUNT, CARD_LEVEL_COUNT, CARD_MAX_COUNT_RESERVED
-from gems.state import PlayerState
 
+from .state import PlayerState
 from .engine import Engine
 from .actions import Action, BuyCardAction, ReserveCardAction, Take2Action, Take3Action
 from .typings import Gem, ActionType, Card, CardIdx
-from .consts import COIN_MAX_COUNT_PER_PLAYER
+from .consts import GameConfig
 from .agents.random import RandomAgent
 
 
@@ -78,39 +77,39 @@ class StateSpace(spaces.Dict):
     turn_mod_players: np.ndarray  # shape (), scalar
     visible_cards: "StateSpace.CardDict"  # structured sub-dict
 
-  def __init__(self, per_card_feats: int, num_players: int, visible_card_count: int, *, seed = None):
+  def __init__(self, config: GameConfig, *, seed = None):
     # initialize base Space with a dummy low/high; we'll delegate to internal
-    self._per_card_feats = per_card_feats
-    self._num_players = num_players
-    self._visible_card_count = visible_card_count
+    self._num_players = config.num_players
+    self._visible_card_count = config.card_visible_total_count
+    self._gem_count = config.gem_count
 
     super().__init__({
-      'bank': spaces.Box(low=0, high=255, shape=(GEM_COUNT,), dtype=np.int32),
-      'player_gems': spaces.Box(low=0, high=255, shape=(GEM_COUNT,), dtype=np.int32),
-      'player_discounts': spaces.Box(low=0, high=255, shape=(GEM_COUNT,), dtype=np.int32),
+      'bank': spaces.Box(low=0, high=255, shape=(self._gem_count,), dtype=np.int32),
+      'player_gems': spaces.Box(low=0, high=255, shape=(self._gem_count,), dtype=np.int32),
+      'player_discounts': spaces.Box(low=0, high=255, shape=(self._gem_count,), dtype=np.int32),
       'player_score': spaces.Box(low=0, high=255, shape=(1,), dtype=np.int32),
       'turn_mod_players': spaces.Discrete(self._num_players),
       'visible_cards': spaces.Dict({
-        'level': spaces.Box(low=0, high=CARD_LEVEL_COUNT, shape=(CARD_VISIBLE_TOTAL_COUNT,), dtype=np.int32),
-        'points': spaces.Box(low=0, high=255, shape=(CARD_VISIBLE_TOTAL_COUNT,), dtype=np.int32),
-        'bonus': spaces.MultiDiscrete([GEM_COUNT + 1] * CARD_VISIBLE_TOTAL_COUNT),
-        'costs': spaces.Box(low=0, high=255, shape=(CARD_VISIBLE_TOTAL_COUNT, GEM_COUNT), dtype=np.int32),
+        'level': spaces.Box(low=0, high=config.card_level_count, shape=(self._visible_card_count,), dtype=np.int32),
+        'points': spaces.Box(low=0, high=255, shape=(self._visible_card_count,), dtype=np.int32),
+        'bonus': spaces.MultiDiscrete([self._gem_count + 1] * self._visible_card_count),
+        'costs': spaces.Box(low=0, high=255, shape=(self._visible_card_count, self._gem_count), dtype=np.int32),
       }),
     }, seed=seed)
 
   def make_obs(self, engine: Engine | None, seat_id: int) -> StateDict:
-    bank = np.zeros(GEM_COUNT, dtype=np.int32)
-    player_gems = np.zeros(GEM_COUNT, dtype=np.int32)
-    player_discounts = np.zeros(GEM_COUNT, dtype=np.int32)
+    bank = np.zeros(self._gem_count, dtype=np.int32)
+    player_gems = np.zeros(self._gem_count, dtype=np.int32)
+    player_discounts = np.zeros(self._gem_count, dtype=np.int32)
     player_score = np.zeros(1, dtype=np.int32)
     # represent turn_mod_players as a scalar ndarray (0-d) to align with Discrete space
     turn_mod_players = np.array(0, dtype=np.int32)
     # visible cards split into structured fields
     visible_levels = np.zeros((self._visible_card_count,), dtype=np.int32)
     visible_points = np.zeros((self._visible_card_count,), dtype=np.int32)
-    # bonus: 0 == none, 1..GEM_COUNT map to GemIndex+1
+    # bonus: 0 == none, 1..self._gem_count map to GemIndex+1
     visible_bonus = np.zeros((self._visible_card_count,), dtype=np.int32)
-    visible_costs = np.zeros((self._visible_card_count, GEM_COUNT), dtype=np.int32)
+    visible_costs = np.zeros((self._visible_card_count, self._gem_count), dtype=np.int32)
     state = engine.get_state() if engine is not None else None
     if state is None:
       return {
@@ -197,7 +196,7 @@ class ActionSpace(spaces.Dict):
     buy: "ActionSpace.BuyDict"
     reserve: "ActionSpace.ReserveDict"
 
-  def __init__(self, *, seed = None):
+  def __init__(self, config: GameConfig, *, seed = None):
     self._type_order = tuple(ActionType)
     self._type_index = {atype: idx for idx, atype in enumerate(self._type_order)}
     # max index space for cards = visible cards + reserved capacity (3) + deck head levels
@@ -205,29 +204,30 @@ class ActionSpace(spaces.Dict):
     # 0..(visible-1) => visible_idx
     # visible..(visible+reserved-1) => reserve_idx (offset by visible)
     # visible+reserved.. => deck_head_level (offset by visible+reserved), one entry per level
-    self._visible_count = CARD_VISIBLE_TOTAL_COUNT
-    self._reserve_count = CARD_MAX_COUNT_RESERVED
-    self._deck_levels = CARD_LEVEL_COUNT
+    self._visible_count = config.card_visible_total_count
+    self._reserve_count = config.card_max_count_reserved
+    self._deck_levels = config.card_level_count
     self._max_card_index = self._visible_count + self._reserve_count + self._deck_levels
+    self._gem_count = config.gem_count
     super().__init__({
       'type': spaces.Discrete(len(self._type_order)),
       'take3': spaces.Dict({
-        'gems': spaces.Box(low=0, high=1, shape=(GEM_COUNT,), dtype=np.int8),
-        'ret': spaces.Box(low=0, high=COIN_MAX_COUNT_PER_PLAYER, shape=(GEM_COUNT,), dtype=np.int8),
+        'gems': spaces.Box(low=0, high=1, shape=(self._gem_count,), dtype=np.int8),
+        'ret': spaces.Box(low=0, high=config.coin_max_count_per_player, shape=(self._gem_count,), dtype=np.int8),
       }),
       'take2': spaces.Dict({
-        'gem': spaces.MultiBinary(GEM_COUNT),
+        'gem': spaces.MultiBinary(self._gem_count),
         'count': spaces.Discrete(3),
-        'ret': spaces.Box(low=0, high=COIN_MAX_COUNT_PER_PLAYER, shape=(GEM_COUNT,), dtype=np.int8),
+        'ret': spaces.Box(low=0, high=config.coin_max_count_per_player, shape=(self._gem_count,), dtype=np.int8),
       }),
       'buy': spaces.Dict({
         'card_idx': spaces.Discrete(self._max_card_index),
-        'payment': spaces.Box(low=0, high=255, shape=(GEM_COUNT,), dtype=np.int32),
+        'payment': spaces.Box(low=0, high=255, shape=(self._gem_count,), dtype=np.int32),
       }),
       'reserve': spaces.Dict({
         'card_idx': spaces.Discrete(self._max_card_index),
         'take_gold': spaces.Discrete(2),
-        'ret': spaces.Box(low=0, high=1, shape=(GEM_COUNT,), dtype=np.int8),
+        'ret': spaces.Box(low=0, high=1, shape=(self._gem_count,), dtype=np.int8),
       }),
     }, seed=seed)
 
@@ -235,22 +235,22 @@ class ActionSpace(spaces.Dict):
     return {
       'type': np.array(0, dtype=np.int32),
       'take3': {
-        'gems': np.zeros(GEM_COUNT, dtype=np.int8),
-        'ret': np.zeros(GEM_COUNT, dtype=np.int8),
+        'gems': np.zeros(self._gem_count, dtype=np.int8),
+        'ret': np.zeros(self._gem_count, dtype=np.int8),
       },
       'take2': {
-        'gem': np.zeros(GEM_COUNT, dtype=np.int8),
+        'gem': np.zeros(self._gem_count, dtype=np.int8),
         'count': np.array(0, dtype=np.int8),
-        'ret': np.zeros(GEM_COUNT, dtype=np.int8),
+        'ret': np.zeros(self._gem_count, dtype=np.int8),
       },
       'buy': {
         'card_idx': np.array(0, dtype=np.int32),
-        'payment': np.zeros(GEM_COUNT, dtype=np.int32),
+        'payment': np.zeros(self._gem_count, dtype=np.int32),
       },
       'reserve': {
         'card_idx': np.array(0, dtype=np.int32),
         'take_gold': np.array(0, dtype=np.int8),
-        'ret': np.zeros(GEM_COUNT, dtype=np.int8),
+        'ret': np.zeros(self._gem_count, dtype=np.int8),
       },
     }
 
@@ -417,7 +417,7 @@ class ActionSpace(spaces.Dict):
   def _decode_ret_gems(self, vec) -> dict[Gem, int] | None:
     """Convert a return-vector (iterable of ints) into a Gem->int dict or None.
 
-    Assumes input is valid (iterable with GEM_COUNT entries). Returns None
+    Assumes input is valid (iterable with self._gem_count entries). Returns None
     when no gems are returned (all zeros).
     """
     if vec is None:
@@ -440,18 +440,18 @@ class GemEnv(gym.Env):
   metadata = {"render_modes": ["human"], "render_fps": 4}
 
   def __init__(self,
-               num_players: int = 2,
+               game_config: GameConfig | None = None,
                seat_id: int = 0,
-               max_actions: int = 128,
                seed: int | None = None,
                reward_fn: Callable[[PlayerState, PlayerState], float] | None = None,
                opponents: Sequence[Any] | None = None):
     super().__init__()
+    config = game_config or GameConfig()
+    num_players = config.num_players
     if seat_id < 0 or seat_id >= num_players:
       raise ValueError("seat_id must be within number of players")
     self.num_players = num_players
     self.seat_id = seat_id
-    self.max_actions = max_actions
     self._base_seed = seed
     self._rng = np.random.default_rng(seed)
     self._engine: Engine | None = None
@@ -471,12 +471,12 @@ class GemEnv(gym.Env):
     # per_card_feats = 2 + (GEM_COUNT + 1) + GEM_COUNT  # level + points + bonus_onehot + cost
     # State space helper responsible for building observations and also
     # acts as the env.observation_space (it subclasses spaces.Space).
-    self._state_space = StateSpace(2 + (GEM_COUNT + 1) + GEM_COUNT, self.num_players, CARD_VISIBLE_TOTAL_COUNT)
+    self._state_space = StateSpace(config, seed=self._base_seed)
     self.observation_space = self._state_space
     # Action space: structured ActionSpace that encodes Action objects
     # Keep `max_actions` for action_mask sizing but the actual gym action
     # is the structured dict produced by `ActionSpace.encode`/expected by agents.
-    self._action_space = ActionSpace(seed=self._base_seed)
+    self._action_space = ActionSpace(config, seed=self._base_seed)
     self.action_space = self._action_space
 
   # Gymnasium API -------------------------------------------------
@@ -614,13 +614,6 @@ class GemEnv(gym.Env):
     legal = self._engine.get_legal_actions(self.seat_id) if self._engine is not None else []
     return {
       'legal_action_count': len(legal),
-      'max_actions': self.max_actions,
-      'action_mask': self._legal_action_mask(len(legal)),
     }
-
-  def _legal_action_mask(self, n: int):
-    mask = np.zeros(self.max_actions, dtype=np.int8)
-    mask[:min(n, self.max_actions)] = 1
-    return mask
 
 __all__ = ["GemEnv", "StateSpace", "ActionSpace"]

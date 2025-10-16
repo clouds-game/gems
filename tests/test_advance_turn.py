@@ -1,3 +1,4 @@
+from gems.consts import GameConfig
 from gems.typings import Card
 from gems.state import PlayerState, GameState
 
@@ -7,9 +8,10 @@ def make_card(level: int, id: str):
 
 
 def test_advance_turn_no_decks():
+  config = GameConfig()
   p = PlayerState(seat_id=0)
   card = make_card(1, 'a')
-  gs = GameState(players=(p,), visible_cards_in=(card,), turn=0)
+  gs = GameState(config, players=(p,), visible_cards_in=(card,), turn=0)
 
   gs2 = gs.advance_turn()
   assert gs2.turn == 1
@@ -18,8 +20,9 @@ def test_advance_turn_no_decks():
 
 
 def test_advance_turn_with_decks_refill():
+  config = GameConfig()
   p = PlayerState(seat_id=0)
-  gs = GameState(players=(p,), visible_cards_in=(), turn=5)
+  gs = GameState(config=config, players=(p,), visible_cards_in=(), turn=5)
 
   # decks: level 1 has two cards, level 2 has one
   d1 = [make_card(1, 'l1c1'), make_card(1, 'l1c2')]

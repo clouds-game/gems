@@ -22,6 +22,7 @@ class GameConfig:
   card_visible_count: int = 4
   card_levels: tuple[int, ...] = (1, 2, 3)
   card_max_count_reserved: int = 3
+  gem_count: int = 6  # Including gold
 
   def __post_init__(self):
     num_players = self.num_players

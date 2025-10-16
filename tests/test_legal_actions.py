@@ -2,7 +2,7 @@ import math
 import pytest
 from gems import Engine
 from gems.actions import Action, Take2Action
-from gems.consts import CARD_LEVELS, CARD_VISIBLE_COUNT, COIN_MAX_COUNT_PER_PLAYER
+from gems.consts import GameConfig
 from gems.typings import ActionType, Gem, Card, GemList
 from gems.state import PlayerState, GameState
 
@@ -24,7 +24,7 @@ def test_buy_card_included_when_affordable():
   p0 = PlayerState(seat_id=0, gems=GemList(((Gem.BLACK, 2),)))
   p1 = PlayerState(seat_id=1, gems=GemList(()))
   # reuse the bank from the current engine state
-  state = GameState(players=(p0, p1), bank=e.get_state().bank, visible_cards_in=(card,), turn=0)
+  state = GameState(config=e.config, players=(p0, p1), bank=e.get_state().bank, visible_cards_in=(card,), turn=0)
   e._state = state
 
   actions = e.get_legal_actions(seat_id=0)
@@ -37,14 +37,14 @@ def test_buy_card_not_included_when_unaffordable_but_included_with_gold():
   card = Card(id='buy-2', cost_in=[(Gem.BLACK, 3)])
   p0 = PlayerState(seat_id=0, gems=GemList(((Gem.BLACK, 2),)))
   p1 = PlayerState(seat_id=1, gems=GemList(()))
-  state = GameState(players=(p0, p1), bank=e.get_state().bank, visible_cards_in=(card,), turn=0)
+  state = GameState(config=e.config, players=(p0, p1), bank=e.get_state().bank, visible_cards_in=(card,), turn=0)
   e._state = state
   actions = e.get_legal_actions(seat_id=0)
   assert not any(a.type == ActionType.BUY_CARD for a in actions)
 
   # now give player a gold to allow substitution
   p0_with_gold = PlayerState(seat_id=0, gems=GemList(((Gem.BLACK, 2), (Gem.GOLD, 1))))
-  state2 = GameState(players=(p0_with_gold, p1), bank=e.get_state().bank,
+  state2 = GameState(config=e.config, players=(p0_with_gold, p1), bank=e.get_state().bank,
                      visible_cards_in=(card,), turn=0)
   e._state = state2
   actions2 = e.get_legal_actions(seat_id=0)
@@ -58,7 +58,7 @@ def test_gold_allows_multiple_payment_combinations():
   # player has 2 red, 2 blue and 1 gold -> multiple ways to pay (use gold for either color or not at all)
   p0 = PlayerState(seat_id=0, gems=GemList(((Gem.RED, 2), (Gem.BLUE, 2), (Gem.GOLD, 1))))
   p1 = PlayerState(seat_id=1, gems=GemList(()))
-  state = GameState(players=(p0, p1), bank=e.get_state().bank, visible_cards_in=(card,), turn=0)
+  state = GameState(config=e.config, players=(p0, p1), bank=e.get_state().bank, visible_cards_in=(card,), turn=0)
   e._state = state
 
   payments = p0.can_afford(card)
@@ -85,7 +85,7 @@ def test_no_legal_actions_fallbacks_to_noop():
   # create a bank with zero tokens for all gem types so no take/buy/reserve
   zero_bank = GemList(((Gem.RED, 0), (Gem.BLUE, 0), (Gem.WHITE, 0),
                       (Gem.BLACK, 0), (Gem.GREEN, 0), (Gem.GOLD, 0)))
-  state = GameState(players=(p0, p1), bank=zero_bank, visible_cards_in=(), turn=0)
+  state = GameState(config=e.config, players=(p0, p1), bank=zero_bank, visible_cards_in=(), turn=0)
   e._state = state
 
   actions = e.get_legal_actions(seat_id=0)
@@ -112,7 +112,7 @@ def test_take_2_same_available_when_bank_has_at_least_four():
     bank_tuple = tuple(bank_dict.items())
     p0 = PlayerState(seat_id=0, gems=GemList(()))
     p1 = PlayerState(seat_id=1, gems=GemList(()))
-    state = GameState(players=(p0, p1), bank=GemList(bank_tuple), visible_cards_in=(), turn=0)
+    state = GameState(config=e.config, players=(p0, p1), bank=GemList(bank_tuple), visible_cards_in=(), turn=0)
     e._state = state
 
     actions = e.get_legal_actions(seat_id=0)
@@ -128,7 +128,7 @@ def test_buy_card_legal_if_affordable_by_exact_payment():
   card = Card(id='aff-1', cost_in=[(Gem.BLACK, 1)])
   p0 = PlayerState(seat_id=0, gems=GemList(((Gem.BLACK, 1),)))
   p1 = PlayerState(seat_id=1, gems=GemList(()))
-  state = GameState(players=(p0, p1), bank=e.get_state().bank, visible_cards_in=(card,), turn=0)
+  state = GameState(config=e.config, players=(p0, p1), bank=e.get_state().bank, visible_cards_in=(card,), turn=0)
   e._state = state
 
   actions = e.get_legal_actions(seat_id=0)
@@ -142,7 +142,7 @@ def test_player_can_buy_own_reserved_card():
   # player 0 has the exact gem to buy the reserved card
   p0 = PlayerState(seat_id=0, gems=GemList(((Gem.BLACK, 1),)), reserved_cards_in=(card,))
   p1 = PlayerState(seat_id=1, gems=GemList(()))
-  state = GameState(players=(p0, p1), bank=e.get_state().bank, visible_cards_in=(), turn=0)
+  state = GameState(config=e.config, players=(p0, p1), bank=e.get_state().bank, visible_cards_in=(), turn=0)
   e._state = state
 
   actions = e.get_legal_actions(seat_id=0)
@@ -158,7 +158,7 @@ def test_take3_with_returns_enumerated_and_apply():
   # craft player with 8 gems (3 red, 3 blue, 2 white)
   p0 = PlayerState(seat_id=0, gems=GemList(((Gem.RED, 3), (Gem.BLUE, 3), (Gem.WHITE, 2))))
   p1 = PlayerState(seat_id=1, gems=GemList(()))
-  state = GameState(players=(p0, p1), bank=e.get_state().bank, visible_cards_in=(), turn=0)
+  state = GameState(config=e.config, players=(p0, p1), bank=e.get_state().bank, visible_cards_in=(), turn=0)
   e._state = state
 
   actions = e.get_legal_actions(seat_id=0)
@@ -198,7 +198,7 @@ def test_take3_no_return_needed_enumerates_combos():
   # create a bank with 5 colored gems available
   bank = GemList(((Gem.RED, 1), (Gem.BLUE, 1), (Gem.WHITE, 1),
                  (Gem.BLACK, 1), (Gem.GREEN, 1), (Gem.GOLD, 5)))
-  state = GameState(players=(p0, p1), bank=bank, visible_cards_in=(), turn=0)
+  state = GameState(config=e.config, players=(p0, p1), bank=bank, visible_cards_in=(), turn=0)
   e._state = state
 
   actions = e.get_legal_actions(seat_id=0)
@@ -217,7 +217,7 @@ def test_take3_with_required_returns_enumerated():
   p1 = PlayerState(seat_id=1, gems=GemList(()))
   # bank has 3 other colors available to take
   bank = GemList(((Gem.WHITE, 1), (Gem.BLACK, 1), (Gem.GREEN, 1), (Gem.GOLD, 5)))
-  state = GameState(players=(p0, p1), bank=bank, visible_cards_in=(), turn=0)
+  state = GameState(config=e.config, players=(p0, p1), bank=bank, visible_cards_in=(), turn=0)
   e._state = state
 
   actions = e.get_legal_actions(seat_id=0)
@@ -234,7 +234,7 @@ def test_take3_returns_within_player_holdings():
   p0 = PlayerState(seat_id=0, gems=GemList(((Gem.RED, 5), (Gem.BLUE, 3))))
   p1 = PlayerState(seat_id=1, gems=GemList(()))
   bank = GemList(((Gem.WHITE, 1), (Gem.BLACK, 1), (Gem.GREEN, 1), (Gem.GOLD, 5)))
-  state = GameState(players=(p0, p1), bank=bank, visible_cards_in=(), turn=0)
+  state = GameState(config=e.config, players=(p0, p1), bank=bank, visible_cards_in=(), turn=0)
   e._state = state
 
   actions = e.get_legal_actions(seat_id=0)
@@ -255,7 +255,7 @@ def test_take2_no_return_needed_enumerates_combos():
   # create a bank with at least 4 of two colors
   bank = GemList(((Gem.RED, 4), (Gem.BLUE, 4), (Gem.WHITE, 1),
                  (Gem.BLACK, 1), (Gem.GREEN, 1), (Gem.GOLD, 5)))
-  state = GameState(players=(p0, p1), bank=bank, visible_cards_in=(), turn=0)
+  state = GameState(config=e.config, players=(p0, p1), bank=bank, visible_cards_in=(), turn=0)
   e._state = state
 
   actions = e.get_legal_actions(seat_id=0)
@@ -275,7 +275,7 @@ def test_take2_required_returns_enumerated_and_apply():
   p1 = PlayerState(seat_id=1, gems=GemList(()))
   # bank has at least 4 of white so take2 on white is available
   bank = GemList(((Gem.WHITE, 4), (Gem.GOLD, 5)))
-  state = GameState(players=(p0, p1), bank=bank, visible_cards_in=(), turn=0)
+  state = GameState(config=e.config, players=(p0, p1), bank=bank, visible_cards_in=(), turn=0)
   e._state = state
 
   actions = e.get_legal_actions(seat_id=0)
@@ -301,7 +301,7 @@ def test_take2_returns_within_player_holdings():
   p0 = PlayerState(seat_id=0, gems=GemList(((Gem.RED, 5), (Gem.BLUE, 5))))
   p1 = PlayerState(seat_id=1, gems=GemList(()))
   bank = GemList(((Gem.WHITE, 4), (Gem.GREEN, 4), (Gem.GOLD, 5)))
-  state = GameState(players=(p0, p1), bank=bank, visible_cards_in=(), turn=0)
+  state = GameState(config=e.config, players=(p0, p1), bank=bank, visible_cards_in=(), turn=0)
   e._state = state
 
   actions = e.get_legal_actions(seat_id=0)
@@ -318,20 +318,21 @@ def test_initial_state_actions_num():
   e = Engine.new(2)
   actions = e.get_legal_actions(seat_id=0)
   kinds = len(Gem) - 1
-  assert len(actions) == math.comb(kinds, 3) + kinds + 0 + len(CARD_LEVELS) * CARD_VISIBLE_COUNT
+  assert len(actions) == math.comb(kinds, 3) + kinds + 0 + e.config.card_visible_total_count
 
 def test_initial_state_has_no_illegal_actions():
   # Create a fresh engine and enumerate legal actions for player 0
   e = Engine.new(2)
   state = e.get_state()
   player = state.players[0]
+  config = e.config
   actions = e.get_legal_actions(seat_id=0)
   illegal = []
 
   for a in actions:
     # _check should pass and apply should succeed without mutating original state
     try:
-      if not a._check(player, state):
+      if not a._check(player, state, config):
         illegal.append(a)
         continue
       # apply on a snapshot; ensure no exception
@@ -350,7 +351,7 @@ def test_reserve_with_return_enumerated_and_apply():
   # player has 10 gems: 5 red, 5 blue
   p0 = PlayerState(seat_id=0, gems=GemList(((Gem.RED, 5), (Gem.BLUE, 5))))
   p1 = PlayerState(seat_id=1, gems=GemList(()))
-  state = GameState(players=(p0, p1), bank=e.get_state().bank, visible_cards_in=(card,), turn=0)
+  state = GameState(config=e.config, players=(p0, p1), bank=e.get_state().bank, visible_cards_in=(card,), turn=0)
   e._state = state
 
   actions = e.get_legal_actions(seat_id=0)
@@ -369,7 +370,7 @@ def test_reserve_with_return_enumerated_and_apply():
   new_state = chosen.apply(state)
   new_p0 = new_state.players[0]
   # player's total gems must remain at max (10)
-  assert sum(n for _, n in new_p0.gems) == COIN_MAX_COUNT_PER_PLAYER
+  assert sum(n for _, n in new_p0.gems) == e.config.coin_max_count_per_player
   # returned gem count decreased by 1
   assert dict(new_p0.gems).get(chosen.ret, 0) == orig_count - 1
   # player gained a gold token

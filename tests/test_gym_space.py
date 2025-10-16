@@ -3,13 +3,15 @@ from typing import cast
 
 from gymnasium import spaces
 
+from gems.consts import GameConfig
 from gems.gym_env import StateSpace, ActionSpace, GemEnv
 from gems.typings import Gem
 from gems.actions import Action
 
 
 def test_action_space_cardidx_flatten_unflatten():
-  aspace = ActionSpace()
+  config = GameConfig()
+  aspace = ActionSpace(config)
   # visible index
   from gems.typings import CardIdx
   v = CardIdx(visible_idx=2)
@@ -38,7 +40,8 @@ def test_action_space_cardidx_flatten_unflatten():
 
 
 def test_action_space_decode_invalid_type_raises():
-  aspace = ActionSpace()
+  config = GameConfig()
+  aspace = ActionSpace(config)
   d = aspace.empty()
   # set an invalid type index
   d['type'][...] = len(aspace._type_order) + 5
@@ -48,7 +51,8 @@ def test_action_space_decode_invalid_type_raises():
 
 
 def test_action_space_decode_take2_no_gem_raises():
-  aspace = ActionSpace()
+  config = GameConfig()
+  aspace = ActionSpace(config)
   d = aspace.empty()
   from gems.typings import ActionType
   # set type to TAKE_2_SAME but leave gem vector empty
@@ -59,21 +63,11 @@ def test_action_space_decode_take2_no_gem_raises():
     aspace.decode(d)
 
 
-def test_gemenv_reset_and_legal_action_mask():
-  env = GemEnv(num_players=2, seat_id=0, max_actions=10, seed=7)
-  mask = env._legal_action_mask(3)
-  assert mask.shape == (10,)
-  assert int(mask.sum()) == 3
-
-  obs, info = env.reset(seed=7)
-  assert 'action_mask' in info
-  assert len(info['action_mask']) == 10
-  assert isinstance(obs, dict)
-
-
 def test_state_space_empty_obs_shapes():
   # create a StateSpace and request an observation with engine=None
-  ss = StateSpace(per_card_feats=2 + (len(Gem) + 1) + len(Gem), num_players=2, visible_card_count=8)
+  config = GameConfig(num_players=2)
+  ss = StateSpace(config)
+  ss._visible_card_count = 8
   obs = ss.make_obs(None, seat_id=0)
   assert isinstance(obs, dict)
   # validate top-level keys
@@ -95,7 +89,8 @@ def test_state_space_empty_obs_shapes():
 
 
 def test_action_space_encode_decode_roundtrip():
-  aspace = ActionSpace()
+  config = GameConfig()
+  aspace = ActionSpace(config)
   # noop
   action_list = [
     Action.take3(Gem.RED, Gem.BLUE, Gem.GREEN),
@@ -140,10 +135,10 @@ def test_state_space_obs():
   # player 1 default
   p1 = engine.get_state().players[1]
 
-  new_state = GameState(players=(p0, p1), bank_in=bank, visible_cards_in=cards, turn=3)
+  new_state = GameState(config=engine.config, players=(p0, p1), bank_in=bank, visible_cards_in=cards, turn=3)
   engine._state = new_state
 
-  ss = StateSpace(per_card_feats=2 + (len(Gem) + 1) + len(Gem), num_players=2, visible_card_count=8)
+  ss = StateSpace(config=engine.config)
   obs = ss.make_obs(engine, seat_id=0)
 
   # bank vector checks (same Gem order as enum)

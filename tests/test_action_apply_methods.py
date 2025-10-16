@@ -5,19 +5,21 @@ from gems.actions import (
   ReserveCardAction,
   NoopAction,
 )
+from gems.consts import GameConfig
 from gems.typings import Gem, Card
 from gems.state import PlayerState, GameState
 
 
 def make_basic_state():
   # two players, bank with some tokens, one visible card
+  config = GameConfig(num_players=2)
   players = (
     PlayerState(seat_id=0, name='P0', gems_in=((Gem.RED, 0), (Gem.BLUE, 0))),
     PlayerState(seat_id=1, name='P1', gems_in=((Gem.RED, 0), (Gem.BLUE, 0))),
   )
   bank = {Gem.RED: 4, Gem.BLUE: 4, Gem.GOLD: 1, Gem.WHITE: 4, Gem.BLACK: 4, Gem.GREEN: 4}
   card = Card(id='c1', level=1, points=1, bonus=Gem.RED, cost_in={Gem.RED: 1})
-  state = GameState(players=players, bank_in=bank.items(), visible_cards_in=(card,), turn=0)
+  state = GameState(config=config, players=players, bank_in=bank.items(), visible_cards_in=(card,), turn=0)
   return state
 
 
@@ -78,7 +80,7 @@ def test_buy_apply_from_visible():
   p0 = state.players[0]
   p0_with_gems = PlayerState(seat_id=0, name='P0', gems_in=((Gem.RED, 1),))
   players = (p0_with_gems, state.players[1])
-  state = GameState(players=players, bank=state.bank, visible_cards=state.visible_cards, turn=0)
+  state = GameState(config=state.config, players=players, bank=state.bank, visible_cards=state.visible_cards, turn=0)
   card = next(iter(state.visible_cards))
   from gems.typings import CardIdx
   action = BuyCardAction.create(CardIdx(visible_idx=0), card, payment={Gem.RED: 1})

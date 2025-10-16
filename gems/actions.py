@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 from collections.abc import Mapping
 from abc import ABC, abstractmethod
 
-from .consts import COIN_MAX_COUNT_PER_PLAYER, COIN_MIN_COUNT_TAKE2_IN_DECK
+from .consts import GameConfig
 from .typings import Gem, ActionType, GemList, Card, CardIdx
 from typing import cast
 from .state import PlayerState, GameState
@@ -66,11 +66,12 @@ class Action(ABC):
 
     seat = state.turn % num_players
     player = state.players[seat]
+    config = state.config
 
-    if not self._check(player, state):
+    if not self._check(player, state, config):
       raise ValueError(f"Action {self} cannot be applied for player {player} in state {state}")
 
-    return self._apply(player, state)
+    return self._apply(player, state, config)
 
   # Serialization helpers
   def serialize(self) -> dict:
@@ -110,7 +111,7 @@ class Action(ABC):
     raise NotImplementedError()
 
   @abstractmethod
-  def _apply(self, player: PlayerState, state: GameState) -> GameState:
+  def _apply(self, player: PlayerState, state: GameState, config: GameConfig) -> GameState:
     """Apply this action for the current-turn player and return a new GameState.
 
     Concrete action classes must implement this. Implementations must not
@@ -121,7 +122,7 @@ class Action(ABC):
     """
 
   @abstractmethod
-  def _check(self, player: PlayerState, state: GameState) -> bool:
+  def _check(self, player: PlayerState, state: GameState, config: GameConfig) -> bool:
     """Return True if this action could be applied for `player` in `state`.
     Implementations should perform non-mutating validation equivalent to
     what `apply` would enforce.
@@ -161,7 +162,7 @@ class Take3Action(Action):
       ret = {Gem(g): n for g, n in ret_raw}
     return cls.create(*gems, ret_map=ret)
 
-  def _apply(self, player: PlayerState, state: GameState) -> GameState:
+  def _apply(self, player: PlayerState, state: GameState, config: GameConfig) -> GameState:
     # Mutable working copies: convert GemList/tuples into mutable dicts/lists
     bank = dict(state.bank)
     player_gems = dict(player.gems)
@@ -184,11 +185,11 @@ class Take3Action(Action):
                              purchased_cards_in=player.purchased_cards)
     players = _replace_tuple(state.players, player.seat_id, new_player)
 
-    return GameState(players=players, bank_in=bank,
+    return GameState(config=state.config, players=players, bank_in=bank,
                      visible_cards_in=visible_cards, turn=state.turn,
                      last_action=self)
 
-  def _check(self, player: PlayerState, state: GameState) -> bool:
+  def _check(self, player: PlayerState, state: GameState, config: GameConfig) -> bool:
     # Ensure each gem to take is available in bank
     bank = {g: amt for g, amt in state.bank}
     for g in self.gems:
@@ -206,12 +207,12 @@ class Take3Action(Action):
     # check final total does not exceed 10
     total_after = sum(player_gems.values()) + len(self.gems) - \
         (sum(n for _, n in self.ret) if self.ret else 0)
-    if total_after > COIN_MAX_COUNT_PER_PLAYER:
+    if total_after > config.coin_max_count_per_player:
       return False
     return True
 
   @classmethod
-  def _get_legal_actions(cls, player: PlayerState, state: GameState) -> list["Take3Action"]:
+  def _get_legal_actions(cls, player: PlayerState, state: GameState, config: GameConfig) -> list["Take3Action"]:
     # Enumerate legal take3 actions: either any combination of 3 distinct non-gold gems
     # with at least 1 in bank, or (if <3 available) a single action taking all remaining
     # distinct gems (permissive fallback matching previous logic).
@@ -225,15 +226,15 @@ class Take3Action(Action):
     from itertools import combinations
 
     max_take = min(len(available), 3)
-    if total + max_take <= COIN_MAX_COUNT_PER_PLAYER:
+    if total + max_take <= config.coin_max_count_per_player:
       # can take max_take without exceeding 10, so enumerate all combos of that size
       combos = combinations(available, max_take)
       for combo in combos:
         actions.append(cls.create(*combo))
     else:
-      max_return = total + max_take - COIN_MAX_COUNT_PER_PLAYER
+      max_return = total + max_take - config.coin_max_count_per_player
       for return_num in range(0, max_return + 1):
-        take_num = COIN_MAX_COUNT_PER_PLAYER + return_num - total
+        take_num = config.coin_max_count_per_player + return_num - total
         combos = combinations(available, take_num)
         for combo in combos:
           ret_available = [[g] * amt for g, amt in player.gems if g not in combo and g != Gem.GOLD]
@@ -283,7 +284,7 @@ class Take2Action(Action):
       ret = {Gem(g): n for g, n in ret_raw}
     return cls.create(gem, count, ret_map=ret)
 
-  def _apply(self, player: PlayerState, state: GameState) -> GameState:
+  def _apply(self, player: PlayerState, state: GameState, config: GameConfig) -> GameState:
     # Mutable working copies: convert GemList/tuples into mutable dicts/lists
     bank = dict(state.bank)
     player_gems = dict(player.gems)
@@ -310,14 +311,14 @@ class Take2Action(Action):
                              purchased_cards_in=player.purchased_cards)
     players = _replace_tuple(state.players, player.seat_id, new_player)
 
-    return GameState(players=players, bank_in=bank,
+    return GameState(config=state.config, players=players, bank_in=bank,
                      visible_cards_in=visible_cards, turn=state.turn,
                      last_action=self)
 
-  def _check(self, player: PlayerState, state: GameState) -> bool:
+  def _check(self, player: PlayerState, state: GameState, config: GameConfig) -> bool:
     if self.gem == Gem.GOLD:
       return False
-    if state.bank.get(self.gem) < COIN_MIN_COUNT_TAKE2_IN_DECK:
+    if state.bank.get(self.gem) < config.coin_min_count_take2_in_deck:
       return False
 
     player_gems = player.gems.to_dict()
@@ -328,12 +329,12 @@ class Take2Action(Action):
           return False
 
     total_after = sum(player_gems.values()) + self.count - (sum(n for _, n in self.ret) if self.ret else 0)
-    if total_after > COIN_MAX_COUNT_PER_PLAYER:
+    if total_after > config.coin_max_count_per_player:
       return False
     return True
 
   @classmethod
-  def _get_legal_actions(cls, player: PlayerState, state: GameState) -> list["Take2Action"]:
+  def _get_legal_actions(cls, player: PlayerState, state: GameState, config: GameConfig) -> list["Take2Action"]:
     # Any non-gold gem with >= COIN_MIN_COUNT_TAKE2_IN_DECK (typically 4) is legal to take 2 of.
     actions: list[Take2Action] = []
     bank = {g: amt for g, amt in state.bank}
@@ -341,11 +342,11 @@ class Take2Action(Action):
     for g, amt in bank.items():
       if g == Gem.GOLD:
         continue
-      if amt < COIN_MIN_COUNT_TAKE2_IN_DECK:
+      if amt < config.coin_min_count_take2_in_deck:
         continue
 
       # compute if taking 2 would exceed the max
-      need_return = max(0, total + 2 - COIN_MAX_COUNT_PER_PLAYER)
+      need_return = max(0, total + 2 - config.coin_max_count_per_player)
       if need_return == 0:
         actions.append(cls.create(g, 2))
         continue
@@ -410,7 +411,7 @@ class BuyCardAction(Action):
     idx = CardIdx(visible_idx=visible_idx, reserve_idx=reserve_idx, deck_head_level=deck_head_level) if idx_raw else None
     return cls.create(idx, card, payment=payment)
 
-  def _apply(self, player: PlayerState, state: GameState) -> GameState:
+  def _apply(self, player: PlayerState, state: GameState, config: GameConfig) -> GameState:
     # Mutable working copies
     bank = dict(state.bank)
     player_gems = dict(player.gems)
@@ -466,11 +467,11 @@ class BuyCardAction(Action):
                              purchased_cards_in=new_purchased)
     players = _replace_tuple(state.players, player.seat_id, new_player)
 
-    return GameState(players=players, bank_in=bank,
+    return GameState(config=state.config, players=players, bank_in=bank,
                      visible_cards_in=visible_cards, turn=state.turn,
                      last_action=self)
 
-  def _check(self, player: PlayerState, state: GameState) -> bool:
+  def _check(self, player: PlayerState, state: GameState, config: GameConfig) -> bool:
     # require idx to be set and match
     if self.idx is None:
       return False
@@ -496,7 +497,7 @@ class BuyCardAction(Action):
     return False
 
   @classmethod
-  def _get_legal_actions(cls, player: PlayerState, state: GameState) -> list["BuyCardAction"]:
+  def _get_legal_actions(cls, player: PlayerState, state: GameState, config: GameConfig) -> list["BuyCardAction"]:
     # For each visible or reserved card, enumerate all exact payment dicts the player can afford.
     actions: list[BuyCardAction] = []
     # visible cards with indices
@@ -569,7 +570,7 @@ class ReserveCardAction(Action):
     idx = CardIdx(visible_idx=visible_idx, reserve_idx=reserve_idx, deck_head_level=deck_head_level) if idx_raw else None
     return cls.create(idx, card, take_gold=take_gold, ret=ret)
 
-  def _apply(self, player: PlayerState, state: GameState) -> GameState:
+  def _apply(self, player: PlayerState, state: GameState, config: GameConfig) -> GameState:
     # Mutable working copies
     bank = dict(state.bank)
     player_gems = dict(player.gems)
@@ -613,12 +614,12 @@ class ReserveCardAction(Action):
                              purchased_cards_in=player.purchased_cards)
     players = _replace_tuple(state.players, player.seat_id, new_player)
 
-    return GameState(players=players, bank_in=bank,
+    return GameState(config=state.config, players=players, bank_in=bank,
                      visible_cards_in=visible_cards, turn=state.turn,
                      last_action=self)
 
-  def _check(self, player: PlayerState, state: GameState) -> bool:
-    if not player.can_reserve():
+  def _check(self, player: PlayerState, state: GameState, config: GameConfig) -> bool:
+    if not player.can_reserve(config):
       return False
     # ensure card is visible
     if self.idx is not None and self.idx.visible_idx is not None:
@@ -645,22 +646,22 @@ class ReserveCardAction(Action):
         return False
 
       total = sum(n for _, n in player.gems)
-      if total != COIN_MAX_COUNT_PER_PLAYER:
+      if total != config.coin_max_count_per_player:
         return False
 
     return True
 
   @classmethod
-  def _get_legal_actions(cls, player: PlayerState, state: GameState) -> list["ReserveCardAction"]:
+  def _get_legal_actions(cls, player: PlayerState, state: GameState, config: GameConfig) -> list["ReserveCardAction"]:
     actions: list[ReserveCardAction] = []
-    if not player.can_reserve():
+    if not player.can_reserve(config):
       return actions
     gold_in_bank = state.bank.get(Gem.GOLD)
     take_gold = gold_in_bank > 0
     total = sum(n for _, n in player.gems)
     for i, card in enumerate(state.visible_cards):
       # Card must be visible to reserve; include gold token if available
-      if take_gold and total + 1 > COIN_MAX_COUNT_PER_PLAYER:
+      if take_gold and total + 1 > config.coin_max_count_per_player:
         # if taking gold would exceed, enumerate possible single-gem returns
 
         # enumerate distinct gems the player can return (exclude gold)
@@ -695,16 +696,16 @@ class NoopAction(Action):
   def from_dict(cls, d: dict) -> 'NoopAction':  # pragma: no cover - trivial
     return cls.create()
 
-  def _apply(self, player: PlayerState, state: GameState) -> GameState:
+  def _apply(self, player: PlayerState, state: GameState, config: GameConfig) -> GameState:
     # simply return a new GameState with last_action set (do not modify turn)
-    return GameState(players=state.players, bank=state.bank,
+    return GameState(config=state.config, players=state.players, bank=state.bank,
                      visible_cards=state.visible_cards, turn=state.turn,
                      last_action=self)
 
-  def _check(self, player: PlayerState, state: GameState) -> bool:
+  def _check(self, player: PlayerState, state: GameState, config: GameConfig) -> bool:
     return True
 
   @classmethod
-  def _get_legal_actions(cls, player: PlayerState, state: GameState) -> list["NoopAction"]:
+  def _get_legal_actions(cls, player: PlayerState, state: GameState, config: GameConfig) -> list["NoopAction"]:
     # Always legal; only used as fallback if no other actions exist.
     return [cls.create()]
