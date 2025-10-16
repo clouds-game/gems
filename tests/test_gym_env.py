@@ -3,7 +3,7 @@ from typing import cast
 from gymnasium import spaces
 
 from gems.consts import GameConfig
-from gems.gym_env import GemEnv
+from gems.gym import GemEnv
 
 def test_gym_env_reset_shapes_and_mask():
   config = GameConfig(num_players=3)

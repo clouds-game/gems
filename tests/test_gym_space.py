@@ -4,7 +4,7 @@ from typing import cast
 from gymnasium import spaces
 
 from gems.consts import GameConfig
-from gems.gym_env import StateSpace, ActionSpace, GemEnv
+from gems.gym import StateSpace, ActionSpace, GemEnv
 from gems.typings import Gem
 from gems.actions import Action
 
