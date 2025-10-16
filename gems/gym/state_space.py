@@ -15,15 +15,25 @@ from ..engine import Engine
 from ..typings import Gem
 from ..consts import GameConfig
 
-
-_ScalarT = TypeVar('_ScalarT', bound=np.generic)
-NDArray1D: TypeAlias = np.ndarray[tuple[int], np.dtype[_ScalarT]]
-NDArray2D: TypeAlias = np.ndarray[tuple[int, int], np.dtype[_ScalarT]]
-Scalar: TypeAlias = np.ndarray[tuple[()], np.dtype[_ScalarT]]
+from ._common import NDArray1D, NDArray2D, Scalar
 
 
 GemIndex = {g: i for i, g in enumerate(Gem)}  # order: enum definition order
 
+
+class CardDict(TypedDict):
+  level: NDArray1D[np.int32]  # shape (CARD_VISIBLE_TOTAL_COUNT,)
+  points: NDArray1D[np.int32]  # shape (CARD_VISIBLE_TOTAL_COUNT,)
+  bonus: NDArray1D[np.int32]  # shape (CARD_VISIBLE_TOTAL_COUNT,)  (0 == none, 1..GEM_COUNT map to GemIndex+1)
+  costs: NDArray2D[np.int32]  # shape (CARD_VISIBLE_TOTAL_COUNT, GEM_COUNT)
+
+class StateDict(TypedDict):
+  bank: NDArray1D[np.int32]  # shape (GEM_COUNT,)
+  player_gems: NDArray1D[np.int32]  # shape (GEM_COUNT,)
+  player_discounts: NDArray1D[np.int32]  # shape (GEM_COUNT,)
+  player_score: NDArray1D[np.int32]  # shape (1,)
+  turn_mod_players: Scalar[np.int32]  # shape (), scalar
+  visible_cards: "CardDict"  # structured sub-dict
 
 class StateSpace(spaces.Dict):
   """Helper to build observations from an Engine state.
@@ -33,20 +43,6 @@ class StateSpace(spaces.Dict):
   `make_obs(engine, seat_id)` method that produces the structured numpy
   observation dict.
   """
-
-  class CardDict(TypedDict):
-    level: NDArray1D[np.int32]  # shape (CARD_VISIBLE_TOTAL_COUNT,)
-    points: NDArray1D[np.int32]  # shape (CARD_VISIBLE_TOTAL_COUNT,)
-    bonus: NDArray1D[np.int32]  # shape (CARD_VISIBLE_TOTAL_COUNT,)  (0 == none, 1..GEM_COUNT map to GemIndex+1)
-    costs: NDArray2D[np.int32]  # shape (CARD_VISIBLE_TOTAL_COUNT, GEM_COUNT)
-
-  class StateDict(TypedDict):
-    bank: NDArray1D[np.int32]  # shape (GEM_COUNT,)
-    player_gems: NDArray1D[np.int32]  # shape (GEM_COUNT,)
-    player_discounts: NDArray1D[np.int32]  # shape (GEM_COUNT,)
-    player_score: NDArray1D[np.int32]  # shape (1,)
-    turn_mod_players: Scalar[np.int32]  # shape (), scalar
-    visible_cards: "StateSpace.CardDict"  # structured sub-dict
 
   def __init__(self, config: GameConfig, *, seed = None):
     # initialize base Space with a dummy low/high; we'll delegate to internal

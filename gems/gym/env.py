@@ -16,7 +16,7 @@ from ..actions import Action
 from ..typings import Gem
 from ..consts import GameConfig
 from .state_space import StateSpace
-from .action_space import ActionSpace
+from .action_space import ActionDict, ActionSpace
 from ..agents.random import RandomAgent
 
 
@@ -81,7 +81,7 @@ class GemEnv(gym.Env):
     info = self._info()
     return obs, info
 
-  def step(self, action: int | Action | ActionSpace.ActionDict):
+  def step(self, action: int | Action | ActionDict):
     if self._engine is None:
       raise RuntimeError("Environment not reset")
     self._advance_until_our_turn()
@@ -103,7 +103,7 @@ class GemEnv(gym.Env):
         chosen_action = legal[action]
     elif isinstance(action, dict):
       # structured ActionSpace encoding provided by agent
-      chosen_action = self._action_space.decode(cast(ActionSpace.ActionDict, action))  # may raise
+      chosen_action = self._action_space.decode(cast(ActionDict, action))  # may raise
       # find matching legal action (by equality)
     else:
       # assume it's an Action instance
