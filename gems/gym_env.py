@@ -30,7 +30,7 @@ Usage example:
 """
 from __future__ import annotations
 
-from typing import Callable, Sequence, Any, TypedDict, cast
+from typing import Callable, Sequence, Any, TypeAlias, TypedDict, TypeVar, cast
 
 import gymnasium as gym
 from gymnasium import spaces
@@ -43,6 +43,12 @@ from .actions import Action, BuyCardAction, ReserveCardAction, Take2Action, Take
 from .typings import Gem, ActionType, Card, CardIdx
 from .consts import GameConfig
 from .agents.random import RandomAgent
+
+
+_ScalarT = TypeVar('_ScalarT', bound=np.generic)
+NDArray1D: TypeAlias = np.ndarray[tuple[int], np.dtype[_ScalarT]]
+NDArray2D: TypeAlias = np.ndarray[tuple[int, int], np.dtype[_ScalarT]]
+Scalar: TypeAlias = np.ndarray[tuple[()], np.dtype[_ScalarT]]
 
 
 GemIndex = {g: i for i, g in enumerate(Gem)}  # order: enum definition order
@@ -64,17 +70,17 @@ class StateSpace(spaces.Dict):
   """
 
   class CardDict(TypedDict):
-    level: np.ndarray  # shape (CARD_VISIBLE_TOTAL_COUNT,)
-    points: np.ndarray  # shape (CARD_VISIBLE_TOTAL_COUNT,)
-    bonus: np.ndarray  # shape (CARD_VISIBLE_TOTAL_COUNT,)  (0 == none, 1..GEM_COUNT map to GemIndex+1)
-    costs: np.ndarray  # shape (CARD_VISIBLE_TOTAL_COUNT, GEM_COUNT)
+    level: NDArray1D[np.int32]  # shape (CARD_VISIBLE_TOTAL_COUNT,)
+    points: NDArray1D[np.int32]  # shape (CARD_VISIBLE_TOTAL_COUNT,)
+    bonus: NDArray1D[np.int32]  # shape (CARD_VISIBLE_TOTAL_COUNT,)  (0 == none, 1..GEM_COUNT map to GemIndex+1)
+    costs: NDArray2D[np.int32]  # shape (CARD_VISIBLE_TOTAL_COUNT, GEM_COUNT)
 
   class StateDict(TypedDict):
-    bank: np.ndarray  # shape (GEM_COUNT,)
-    player_gems: np.ndarray  # shape (GEM_COUNT,)
-    player_discounts: np.ndarray  # shape (GEM_COUNT,)
-    player_score: np.ndarray  # shape (1,)
-    turn_mod_players: np.ndarray  # shape (), scalar
+    bank: NDArray1D[np.int32]  # shape (GEM_COUNT,)
+    player_gems: NDArray1D[np.int32]  # shape (GEM_COUNT,)
+    player_discounts: NDArray1D[np.int32]  # shape (GEM_COUNT,)
+    player_score: NDArray1D[np.int32]  # shape (1,)
+    turn_mod_players: Scalar[np.int32]  # shape (), scalar
     visible_cards: "StateSpace.CardDict"  # structured sub-dict
 
   def __init__(self, config: GameConfig, *, seed = None):
@@ -171,26 +177,26 @@ class ActionSpace(spaces.Dict):
   GEM_LIST = list(Gem)
 
   class Take3Dict(TypedDict):
-    gems: np.ndarray
-    ret: np.ndarray
+    gems: NDArray1D[np.int8]
+    ret: NDArray1D[np.int8]
 
   class Take2Dict(TypedDict):
-    gem: np.ndarray
-    count: np.ndarray
-    ret: np.ndarray
+    gem: NDArray1D[np.int8]
+    count: Scalar[np.int8]
+    ret: NDArray1D[np.int8]
 
   class BuyDict(TypedDict):
     # flattened card index (0..visible+reserved-1)
-    card_idx: np.ndarray
-    payment: np.ndarray
+    card_idx: Scalar[np.int32]
+    payment: NDArray1D[np.int32]
 
   class ReserveDict(TypedDict):
-    card_idx: np.ndarray
-    take_gold: np.ndarray
-    ret: np.ndarray
+    card_idx: Scalar[np.int32]
+    take_gold: Scalar[np.int8]
+    ret: NDArray1D[np.int8]
 
   class ActionDict(TypedDict):
-    type: np.ndarray
+    type: Scalar[np.int32]
     take3: "ActionSpace.Take3Dict"
     take2: "ActionSpace.Take2Dict"
     buy: "ActionSpace.BuyDict"
