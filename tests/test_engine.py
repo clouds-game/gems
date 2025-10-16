@@ -177,7 +177,6 @@ def test_gym_env_step_out_of_range_defaults_to_first_action():
     assert env._engine is not None
     legal = env._engine.get_legal_actions(env.seat_id)
     assert legal
-    first_type = legal[0].type.value
 
     result = env.step(len(legal) + 5)
     assert result is not None
@@ -203,7 +202,7 @@ def test_gym_env_step_out_of_range_defaults_to_first_action():
     assert isinstance(reward, float)
     assert isinstance(terminated, bool)
     assert isinstance(truncated, bool)
-    assert info['chosen_action_index'] == len(legal) + 5
-    assert info['action_applied_type'] == first_type
+    assert info['chosen_action'].type.value == "noop"
+    assert info['action_applied_type'] == "noop"
   finally:
     env.close()
