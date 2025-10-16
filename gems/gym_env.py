@@ -39,7 +39,7 @@ import numpy as np
 from gems.consts import CARD_VISIBLE_TOTAL_COUNT, CARD_LEVEL_COUNT, CARD_MAX_COUNT_RESERVED
 
 from .engine import Engine
-from .actions import Action
+from .actions import Action, BuyCardAction, ReserveCardAction, Take2Action, Take3Action
 from .typings import Gem, ActionType, Card, CardIdx
 from .consts import COIN_MAX_COUNT_PER_PLAYER
 from .agents.random import RandomAgent
@@ -257,70 +257,69 @@ class ActionSpace(spaces.Dict):
   def encode(self, action: Action) -> "ActionSpace.ActionDict":
     data = self.empty()
     data['type'][...] = self._type_index[action.type]
-    if action.type == ActionType.TAKE_3_DIFFERENT:
-      take3 = data['take3']
-      take3['gems'][...] = 0
-      for gem in getattr(action, 'gems', ()):  # type: ignore[attr-defined]
-        take3['gems'][GemIndex[gem]] = 1
-      take3['ret'][...] = 0
-      ret = getattr(action, 'ret', None)  # type: ignore[attr-defined]
-      if ret:
-        for gem, amount in ret:
-          take3['ret'][GemIndex[gem]] = int(amount)
-      return data
-    if action.type == ActionType.TAKE_2_SAME:
-      take2 = data['take2']
-      take2['gem'][...] = 0
-      gem = getattr(action, 'gem')  # type: ignore[attr-defined]
-      take2['gem'][GemIndex[gem]] = 1
-      count = getattr(action, 'count', 0)  # type: ignore[attr-defined]
-      take2['count'][...] = int(count)
-      take2['ret'][...] = 0
-      ret = getattr(action, 'ret', None)  # type: ignore[attr-defined]
-      if ret:
-        for gem_ret, amount in ret:
-          take2['ret'][GemIndex[gem_ret]] = int(amount)
-      return data
-    if action.type == ActionType.BUY_CARD:
-      buy = data['buy']
-      # encode CardIdx into a single integer index using the layout described above
-      buy['card_idx'][...] = 0
-      if getattr(action, 'idx', None) is not None:
-        idx: CardIdx = action.idx  # type: ignore[assignment]
-        if idx.visible_idx is not None:
-          buy['card_idx'][...] = int(idx.visible_idx)
-        elif idx.reserve_idx is not None:
-          buy['card_idx'][...] = int(self._visible_count + int(idx.reserve_idx))
-        elif idx.deck_head_level is not None:
-          # deck_head_level expected 1..CARD_LEVEL_COUNT; map to 0-based
-          level = int(idx.deck_head_level) - 1
-          buy['card_idx'][...] = int(self._visible_count + self._reserve_count + level)
-      buy['payment'][...] = 0
-      for gem, amount in getattr(action, 'payment', ()):  # type: ignore[attr-defined]
-        buy['payment'][GemIndex[gem]] = int(amount)
-      return data
-    if action.type == ActionType.RESERVE_CARD:
-      reserve = data['reserve']
-      reserve['card_idx'][...] = 0
-      if getattr(action, 'idx', None) is not None:
-        idx: CardIdx = action.idx  # type: ignore[assignment]
-        if idx.visible_idx is not None:
-          reserve['card_idx'][...] = int(idx.visible_idx)
-        elif idx.reserve_idx is not None:
-          reserve['card_idx'][...] = int(self._visible_count + int(idx.reserve_idx))
-        elif idx.deck_head_level is not None:
-          level = int(idx.deck_head_level) - 1
-          reserve['card_idx'][...] = int(self._visible_count + self._reserve_count + level)
-      take_gold = int(bool(getattr(action, 'take_gold', False)))  # type: ignore[attr-defined]
-      reserve['take_gold'][...] = take_gold
-      reserve['ret'][...] = 0
-      ret = getattr(action, 'ret', None)  # type: ignore[attr-defined]
-      if ret is not None:
-        reserve['ret'][GemIndex[ret]] = 1
-      return data
+    if isinstance(action, Take3Action):
+      return self._encode_take3(data, action)
+    if isinstance(action, Take2Action):
+      return self._encode_take2(data, action)
+    if isinstance(action, BuyCardAction):
+      return self._encode_buy(data, action)
+    if isinstance(action, ReserveCardAction):
+      return self._encode_reserve(data, action)
     if action.type == ActionType.NOOP:
       return data
     raise ValueError(f"Unsupported action type: {action.type}")
+
+  def _encode_take3(self, data: "ActionSpace.ActionDict", action: Take3Action) -> "ActionSpace.ActionDict":
+    take3 = data['take3']
+    take3['gems'][...] = 0
+    for gem in action.gems:  # type: ignore[attr-defined]
+      take3['gems'][GemIndex[gem]] = 1
+    take3['ret'][...] = 0
+    for gem, amount in action.ret or ():
+      take3['ret'][GemIndex[gem]] = int(amount)
+    return data
+
+  def _encode_take2(self, data: "ActionSpace.ActionDict", action: Take2Action) -> "ActionSpace.ActionDict":
+    take2 = data['take2']
+    take2['gem'][...] = 0
+    take2['gem'][GemIndex[action.gem]] = 1
+    take2['count'][...] = int(action.count)
+    take2['ret'][...] = 0
+    for gem_ret, amount in action.ret or ():
+        take2['ret'][GemIndex[gem_ret]] = int(amount)
+    return data
+
+  def _encode_buy(self, data: "ActionSpace.ActionDict", action: BuyCardAction) -> "ActionSpace.ActionDict":
+    buy = data['buy']
+    # encode CardIdx into a single integer index using the layout described above
+    buy['card_idx'][...] = 0
+    if action.idx is not None:
+      buy['card_idx'][...] = self._flatten_card_idx(action.idx)
+    buy['payment'][...] = 0
+    for gem, amount in action.payment or ():
+      buy['payment'][GemIndex[gem]] = int(amount)
+    return data
+
+  def _encode_reserve(self, data: "ActionSpace.ActionDict", action: ReserveCardAction) -> "ActionSpace.ActionDict":
+    reserve = data['reserve']
+    reserve['card_idx'][...] = 0
+    if action.idx is not None:
+      reserve['card_idx'][...] = self._flatten_card_idx(action.idx)
+    reserve['take_gold'][...] = int(bool(action.take_gold))
+    reserve['ret'][...] = 0
+    if action.ret is not None:
+      reserve['ret'][GemIndex[action.ret]] = 1
+    return data
+
+  def _flatten_card_idx(self, idx: CardIdx) -> int:
+    if idx.visible_idx is not None:
+      return int(idx.visible_idx)
+    elif idx.reserve_idx is not None:
+      return int(self._visible_count + int(idx.reserve_idx))
+    elif idx.deck_head_level is not None:
+      level = int(idx.deck_head_level) - 1
+      return int(self._visible_count + self._reserve_count + level)
+    return -1
 
   def encode_many(self, actions: Sequence[Action]) -> list["ActionSpace.ActionDict"]:
     return [self.encode(action) for action in actions]
