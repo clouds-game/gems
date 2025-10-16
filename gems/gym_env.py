@@ -168,8 +168,7 @@ class ActionSpace(spaces.Dict):
   The `type` field selects which subset of data is meaningful for the action.
   Other subsets remain zeroed so a single dict shape can represent all actions.
   """
-
-  _CARD_ID_MAX_LENGTH = 64
+  GEM_LIST = list(Gem)
 
   class Take3Dict(TypedDict):
     gems: np.ndarray
@@ -372,17 +371,13 @@ class ActionSpace(spaces.Dict):
     raise ValueError(f"Unsupported action type for decode: {atype}")
 
   def _decode_take3(self, take3: "ActionSpace.Take3Dict") -> Take3Action:
-    gem_list = list(Gem)
     gems_vec = take3['gems']
-    gems = tuple(gem_list[i] for i, v in enumerate(gems_vec) if int(v) != 0)
+    gems = tuple(self.GEM_LIST[i] for i, v in enumerate(gems_vec) if int(v) != 0)
     ret_vec = take3['ret']
-    ret = None
-    if take3['ret'].sum() > 0:
-      ret = {gem_list[i]: int(ret_vec[i]) for i in range(len(ret_vec)) if int(ret_vec[i]) > 0}
+    ret = self._decode_ret_gems(ret_vec)
     return Take3Action.create(*gems, ret_map=ret)
 
   def _decode_take2(self, take2: "ActionSpace.Take2Dict") -> Take2Action:
-    gem_list = list(Gem)
     gem_vec = take2['gem']
     gem_idx = None
     for i, v in enumerate(gem_vec):
@@ -391,35 +386,45 @@ class ActionSpace(spaces.Dict):
         break
     if gem_idx is None:
       raise ValueError("Invalid Take2 encoding: no gem selected")
-    gem = gem_list[gem_idx]
+    gem = self.GEM_LIST[gem_idx]
     count = int(take2['count'])
-    ret_vec = take2['ret']
-    ret = None
-    if ret_vec.sum() > 0:
-      ret = {gem_list[i]: int(ret_vec[i]) for i in range(len(ret_vec)) if int(ret_vec[i]) > 0}
+    ret = self._decode_ret_gems(take2['ret'])
     return Take2Action.create(gem, count, ret_map=ret)
 
   def _decode_buy(self, buy: "ActionSpace.BuyDict") -> BuyCardAction:
-    gem_list = list(Gem)
     flat = int(buy['card_idx'])
     idx = self._unflatten_card_idx(flat)
     pay_vec = buy['payment']
-    payment = {gem_list[i]: int(pay_vec[i]) for i in range(len(pay_vec)) if int(pay_vec[i]) > 0}
+    payment = {self.GEM_LIST[i]: int(pay_vec[i]) for i in range(len(pay_vec)) if int(pay_vec[i]) > 0}
     return BuyCardAction.create(idx, None, payment=payment)
 
   def _decode_reserve(self, reserve: "ActionSpace.ReserveDict") -> ReserveCardAction:
-    gem_list = list(Gem)
     flat = int(reserve['card_idx'])
     idx = self._unflatten_card_idx(flat)
     take_gold = bool(int(reserve['take_gold']))
     ret_vec = reserve['ret']
+    # Reserve encodes a single gem as a one-hot vector; reuse helper and
+    # extract the first gem if present.
+    _ret = self._decode_ret_gems(ret_vec)
     ret = None
-    if ret_vec.sum() > 0:
-      for i, v in enumerate(ret_vec):
-        if int(v) != 0:
-          ret = gem_list[i]
-          break
+    # pick first gem from dict (deterministic order is Gem enum order)
+    for g in _ret or ():
+      ret = g
+      break
     return ReserveCardAction.create(idx, None, take_gold=take_gold, ret=ret)
+
+  def _decode_ret_gems(self, vec) -> dict[Gem, int] | None:
+    """Convert a return-vector (iterable of ints) into a Gem->int dict or None.
+
+    Assumes input is valid (iterable with GEM_COUNT entries). Returns None
+    when no gems are returned (all zeros).
+    """
+    if vec is None:
+      return None
+    total = sum(int(x) for x in vec)
+    if total == 0:
+      return None
+    return {self.GEM_LIST[i]: int(vec[i]) for i in range(len(vec)) if int(vec[i]) > 0}
 
   def decode_many(self, actions: Sequence["ActionSpace.ActionDict"]) -> list[Action]:
     return [self.decode(a) for a in actions]
