@@ -251,6 +251,19 @@ class CardIdx:
     if non_null != 1:
       raise ValueError("CardIdx requires exactly one of visible_idx, reserve_idx, deck_head_level to be set")
 
+  def __str__(self) -> str:
+    return self.to_str()
+
+  def to_str(self, id: str | None = None) -> str:
+    id_part = f"={id}" if id is not None else ""
+    if self.visible_idx is not None:
+      return f"<[{self.visible_idx}]{id_part}>"
+    if self.reserve_idx is not None:
+      return f"<R[{self.reserve_idx}]{id_part}>"
+    if self.deck_head_level is not None:
+      return f"<D[{self.deck_head_level}]{id_part}>"
+    return f"<[Invalid]{id_part}>"
+
 
 @dataclass(frozen=True)
 class Role:

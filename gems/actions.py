@@ -33,11 +33,15 @@ class Action(ABC):
     idx = None
     if visible_idx is not None or reserve_idx is not None:
       idx = CardIdx(visible_idx=visible_idx, reserve_idx=reserve_idx)
+    if idx is None:
+      raise ValueError("Must provide at least one of visible_idx or reserve_idx to identify card to buy")
     return BuyCardAction.create(idx, card, payment=payment)
 
   @classmethod
   def reserve(cls, card: Card, take_gold: bool = True, visible_idx: int | None = None) -> 'ReserveCardAction':
     idx = CardIdx(visible_idx=visible_idx) if visible_idx is not None else None
+    if idx is None:
+      raise ValueError("Must provide visible_idx to identify card to reserve")
     return ReserveCardAction.create(idx, card, take_gold=take_gold)
 
   @classmethod
@@ -366,16 +370,20 @@ class BuyCardAction(Action):
   card: Card | None
   payment: GemList = field(default_factory=GemList)
 
+  def __post_init__(self) -> None:
+    if self.idx is None and self.card is None:
+      raise ValueError("BuyCardAction requires at least one of idx or card to identify the card to buy")
+
   @classmethod
   def create(cls, card_idx: CardIdx | None, card: Card | None = None, payment: Mapping[Gem, int] | None = None) -> 'BuyCardAction':
     pay = GemList(dict(payment) if payment is not None else {})
-    return cls(type=ActionType.BUY_CARD, card=card, payment=pay, idx=card_idx)
+    return cls(type=ActionType.BUY_CARD, idx=card_idx, card=card, payment=pay)
 
   def __str__(self) -> str:
-    cid = getattr(self.card, 'id', None)
+    cid = self.card.id if self.card is not None else None
     if self.idx is None:
       return f"Action.Buy(<{cid}>, {self.payment})"
-    return f"Action.Buy(<{cid}>, {self.payment}, {self.idx})"
+    return f"Action.Buy({self.idx.to_str(cid)}, {self.payment})"
 
   def to_dict(self) -> dict:
     return {
@@ -514,20 +522,25 @@ class ReserveCardAction(Action):
   # optional single gem to return if taking gold would push player over the limit
   ret: Gem | None = None
 
+  def __post_init__(self) -> None:
+    if self.idx is None and self.card is None:
+      raise ValueError("ReserveCardAction requires at least one of idx or card to identify the card to reserve")
+
   @classmethod
-  def create(cls, card_idx: CardIdx | None, card: Card | None, take_gold: bool = True, ret: Gem | None = None) -> 'ReserveCardAction':
-    return cls(type=ActionType.RESERVE_CARD, card=card, take_gold=bool(take_gold), ret=ret, idx=card_idx)
+  def create(cls, card_idx: CardIdx | None, card: Card | None = None, take_gold: bool = True, ret: Gem | None = None) -> 'ReserveCardAction':
+    return cls(type=ActionType.RESERVE_CARD, idx=card_idx, card=card, take_gold=bool(take_gold), ret=ret)
 
   def __str__(self) -> str:
-    cid = getattr(self.card, 'id', None)
+    cid = self.card.id if self.card is not None else None
     ext = ""
     if self.take_gold:
       ext = f"{Gem.GOLD.color_circle()}"
       if self.ret:
         ext = f"{ext}-{self.ret.color_circle()}"
-    if ext:
-      return f"Action.Reserve(<{cid}>, {ext})"
-    return f"Action.Reserve(<{cid}>)"
+      ext = f", {ext}"
+    if self.idx is None:
+      return f"Action.Reserve(<{cid}>{ext})"
+    return f"Action.Reserve({self.idx.to_str(cid)}{ext})"
 
   def to_dict(self) -> dict:
     return {

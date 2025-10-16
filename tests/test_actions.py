@@ -8,6 +8,7 @@ from gems.actions import (
 )
 from gems.typings import (
   ActionType,
+  CardIdx,
   Gem,
   Card,
 )
@@ -36,22 +37,24 @@ def test_action_constructors_basic():
   assert str(a2) == "Action.Take2(2⚪)"
 
   card1 = Card(id='card-1', level=1, cost_in={Gem.BLACK: 1})
-  a3 = Action.buy(card1, payment={Gem.BLACK: 1, Gem.GREEN: 1})
+  a3 = Action.buy(card1, payment={Gem.BLACK: 1, Gem.GREEN: 1}, visible_idx=0)
   assert isinstance(a3, Action)
   assert isinstance(a3, BuyCardAction)
   assert a3.type == ActionType.BUY_CARD
+  assert a3.card is not None
   assert a3.card is card1
   assert a3.card.id == 'card-1'
+  assert a3.idx == CardIdx(visible_idx=0)
   assert any(g == Gem.BLACK for g, _ in a3.payment)
-  assert str(a3) == "Action.Buy(<card-1>, 1⚫1🟢)"
+  assert str(a3) == "Action.Buy(<[0]=card-1>, 1⚫1🟢)"
 
   card2 = Card(id='card-2', level=1)
-  a4 = Action.reserve(card2, take_gold=True)
+  a4 = Action.reserve(card2, take_gold=True, visible_idx=0)
   assert isinstance(a4, Action)
   assert isinstance(a4, ReserveCardAction)
   assert a4.type == ActionType.RESERVE_CARD
   assert a4.take_gold is True
-  assert str(a4) == "Action.Reserve(<card-2>, 🟡)"
+  assert str(a4) == "Action.Reserve(<[0]=card-2>, 🟡)"
 
   a5 = Action.take3(Gem.RED, Gem.BLUE, Gem.GREEN, ret_map = {Gem.WHITE: 2})
   assert isinstance(a5, Action)
@@ -81,8 +84,10 @@ def test_action_serialize_roundtrip():
     Action.noop(),
     Action.take3(Gem.RED, Gem.BLUE, Gem.GREEN),
     Action.take2(Gem.WHITE),
-    Action.buy(card1, payment={Gem.BLACK: 1, Gem.GOLD: 1}),
-    Action.reserve(card1, take_gold=False),
+    Action.buy(card1, payment={Gem.BLACK: 1, Gem.GOLD: 1}, visible_idx=0),
+    Action.reserve(card1, take_gold=False, visible_idx=1),
+    BuyCardAction.create(None, card1, payment={Gem.BLACK: 1, Gem.GOLD: 1}),
+    ReserveCardAction.create(None, card1, take_gold=False),
     Action.take3(Gem.RED, Gem.BLUE, Gem.GREEN, ret_map={Gem.WHITE: 2}),
     Action.take2(Gem.WHITE, ret_map={Gem.RED: 1}),
   ]
