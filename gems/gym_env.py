@@ -324,6 +324,106 @@ class ActionSpace(spaces.Dict):
   def encode_many(self, actions: Sequence[Action]) -> list["ActionSpace.ActionDict"]:
     return [self.encode(action) for action in actions]
 
+  def _unflatten_card_idx(self, flat: int) -> CardIdx | None:
+    """Inverse of _flatten_card_idx: turn integer index back into CardIdx.
+
+    Returns None only if `flat` is negative. Note: callers may pass 0
+    which is a valid visible index (0) so treat 0 normally.
+    """
+    if flat is None:
+      return None
+    try:
+      idx = int(flat)
+    except Exception:
+      return None
+    if idx < 0:
+      return None
+    if idx < self._visible_count:
+      return CardIdx(visible_idx=idx)
+    if idx < self._visible_count + self._reserve_count:
+      return CardIdx(reserve_idx=idx - self._visible_count)
+    if idx < self._visible_count + self._reserve_count + self._deck_levels:
+      level = (idx - self._visible_count - self._reserve_count) + 1
+      return CardIdx(deck_head_level=level)
+    return None
+
+  def decode(self, data: "ActionSpace.ActionDict") -> Action:
+    """Decode a structured ActionDict (as produced by `encode`) back into an Action object.
+
+    This method simply dispatches to small, focused helpers for each
+    action type to keep implementations readable and testable.
+    """
+    # resolve action type
+    tval = int(data['type']) if hasattr(data['type'], '__int__') else int(data['type'].item())
+    if tval < 0 or tval >= len(self._type_order):
+      raise ValueError(f"Invalid action type index: {tval}")
+    atype = self._type_order[tval]
+
+    if atype == ActionType.TAKE_3_DIFFERENT:
+      return self._decode_take3(data['take3'])
+    if atype == ActionType.TAKE_2_SAME:
+      return self._decode_take2(data['take2'])
+    if atype == ActionType.BUY_CARD:
+      return self._decode_buy(data['buy'])
+    if atype == ActionType.RESERVE_CARD:
+      return self._decode_reserve(data['reserve'])
+    if atype == ActionType.NOOP:
+      return Action.noop()
+    raise ValueError(f"Unsupported action type for decode: {atype}")
+
+  def _decode_take3(self, take3: "ActionSpace.Take3Dict") -> Take3Action:
+    gem_list = list(Gem)
+    gems_vec = take3['gems']
+    gems = tuple(gem_list[i] for i, v in enumerate(gems_vec) if int(v) != 0)
+    ret_vec = take3['ret']
+    ret = None
+    if take3['ret'].sum() > 0:
+      ret = {gem_list[i]: int(ret_vec[i]) for i in range(len(ret_vec)) if int(ret_vec[i]) > 0}
+    return Take3Action.create(*gems, ret_map=ret)
+
+  def _decode_take2(self, take2: "ActionSpace.Take2Dict") -> Take2Action:
+    gem_list = list(Gem)
+    gem_vec = take2['gem']
+    gem_idx = None
+    for i, v in enumerate(gem_vec):
+      if int(v) != 0:
+        gem_idx = i
+        break
+    if gem_idx is None:
+      raise ValueError("Invalid Take2 encoding: no gem selected")
+    gem = gem_list[gem_idx]
+    count = int(take2['count'])
+    ret_vec = take2['ret']
+    ret = None
+    if ret_vec.sum() > 0:
+      ret = {gem_list[i]: int(ret_vec[i]) for i in range(len(ret_vec)) if int(ret_vec[i]) > 0}
+    return Take2Action.create(gem, count, ret_map=ret)
+
+  def _decode_buy(self, buy: "ActionSpace.BuyDict") -> BuyCardAction:
+    gem_list = list(Gem)
+    flat = int(buy['card_idx'])
+    idx = self._unflatten_card_idx(flat)
+    pay_vec = buy['payment']
+    payment = {gem_list[i]: int(pay_vec[i]) for i in range(len(pay_vec)) if int(pay_vec[i]) > 0}
+    return BuyCardAction.create(idx, None, payment=payment)
+
+  def _decode_reserve(self, reserve: "ActionSpace.ReserveDict") -> ReserveCardAction:
+    gem_list = list(Gem)
+    flat = int(reserve['card_idx'])
+    idx = self._unflatten_card_idx(flat)
+    take_gold = bool(int(reserve['take_gold']))
+    ret_vec = reserve['ret']
+    ret = None
+    if ret_vec.sum() > 0:
+      for i, v in enumerate(ret_vec):
+        if int(v) != 0:
+          ret = gem_list[i]
+          break
+    return ReserveCardAction.create(idx, None, take_gold=take_gold, ret=ret)
+
+  def decode_many(self, actions: Sequence["ActionSpace.ActionDict"]) -> list[Action]:
+    return [self.decode(a) for a in actions]
+
   # Note: card properties are not encoded in the ActionSpace anymore.
   # Actions that reference cards should use a discrete `card_idx` field
   # (0..visible+reserved-1). Mapping from Card -> index must be handled
