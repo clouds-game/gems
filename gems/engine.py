@@ -12,7 +12,7 @@ from typing import TypeVar
 from collections.abc import Sequence
 
 from .agents.core import Agent, BaseAgent
-from .consts import CARD_LEVELS, COIN_DEFAULT_INIT, COIN_GOLD_INIT, DEFAULT_PLAYERS, CARD_VISIBLE_COUNT
+from .consts import GameConfig
 
 from .typings import ActionType, Gem, Card, Role
 from .state import PlayerState, GameState
@@ -33,6 +33,7 @@ class Engine:
   - `print_summary()` to display a human readable summary
   """
 
+  config: GameConfig
   _num_players: int
   _state: GameState
   decks_by_level: dict[int, list[Card]]
@@ -49,6 +50,7 @@ class Engine:
       decks_by_level: dict[int, list[Card]],
       roles_deck: list[Role],
       rng: random.Random,
+      config: GameConfig | None = None,
       seed: int | None = None,
       all_noops_last_round: bool = False,
       action_history: list[Action] | None = None,
@@ -59,6 +61,8 @@ class Engine:
     self.decks_by_level = decks_by_level
     self.roles_deck = roles_deck
     self._rng = rng
+    # store/use provided configuration (fall back to sensible default)
+    self.config = config or GameConfig(num_players=num_players)
     # preserve the seed used to construct the RNG when available so serialized
     # engines can be reproduced deterministically
     self._seed = seed
@@ -67,10 +71,19 @@ class Engine:
     self._actions_to_replay = []
 
   @staticmethod
-  def new(num_players: int = DEFAULT_PLAYERS, names: list[str] | None = None, seed: int | None = None) -> "Engine":
-    if not (1 <= num_players <= 4):
-      raise ValueError("num_players must be between 1 and 4")
-    state = Engine.create_game(num_players, names)
+  def new(
+      num_players: int = 4,
+      names: list[str] | None = None,
+      seed: int | None = None,
+      config: GameConfig | None = None,
+  ) -> "Engine":
+    # basic validation: at least 1 player
+    if num_players < 1:
+      raise ValueError("num_players must be positive")
+
+    cfg = config or GameConfig(num_players=num_players)
+    # create minimal starting state using the provided config
+    state = Engine.create_game(num_players, names, cfg)
     engine = Engine(
       num_players=num_players,
       names=names,
@@ -78,18 +91,19 @@ class Engine:
       decks_by_level={},
       roles_deck=[],
       rng=random.Random(seed),
+      config=cfg,
       seed=seed,
     )
     engine.load_and_shuffle_assets()
     visible_cards: list[Card] = []
-    for lvl in CARD_LEVELS:
-      drawn = engine.draw_from_deck(lvl, CARD_VISIBLE_COUNT)
+    for lvl in engine.config.card_levels:
+      drawn = engine.draw_from_deck(lvl, engine.config.card_visible_count)
       visible_cards.extend(reversed(drawn))
-    roles_to_draw = (num_players or DEFAULT_PLAYERS) + 1
+    roles_to_draw = engine._num_players + 1
     visible_roles = []
     for _ in range(min(roles_to_draw, len(engine.roles_deck))):
       visible_roles.append(engine.roles_deck.pop())
-    engine._state = GameState(players=engine._state.players, bank=engine._state.bank,
+    engine._state = GameState(config=cfg, players=engine._state.players, bank=engine._state.bank,
                               visible_cards_in=visible_cards, visible_roles_in=visible_roles,
                               turn=engine._state.turn)
     engine._all_noops_last_round = False
@@ -104,6 +118,7 @@ class Engine:
         decks_by_level={lvl: list(deck) for lvl, deck in self.decks_by_level.items()},
         roles_deck=list(self.roles_deck),
         rng=random.Random(seed),  # new RNG instance
+        config=self.config,
         seed=self._seed,
         all_noops_last_round=self._all_noops_last_round,
         action_history=list(self._action_history),
@@ -173,14 +188,13 @@ class Engine:
     self._actions_to_replay = []
 
   @staticmethod
-  def create_game(num_players: int = DEFAULT_PLAYERS, names: list[str] | None = None) -> GameState:
+  def create_game(num_players: int = 4, names: list[str] | None = None, config: GameConfig | None = None) -> GameState:
     """Create and return a minimal starting GameState.
 
     - num_players: between 2 and 4 (inclusive).
     - names: optional list of player display names; defaults to "Player 1"...
     """
-    # if not (2 <= num_players <= 4):
-    #   raise ValueError("num_players must be between 2 and 4")
+    cfg = config or GameConfig(num_players=num_players)
 
     names = names or [f"Player {i + 1}" for i in range(num_players)]
     if len(names) < num_players:
@@ -189,20 +203,20 @@ class Engine:
 
     players = [PlayerState(seat_id=i, name=names[i]) for i in range(num_players)]
 
-    coin_default_init = COIN_DEFAULT_INIT[min(num_players, DEFAULT_PLAYERS) - 1]
-    # Typical gem counts for a 2-4 player game (simple heuristic):
+    coin_default_init = cfg.coin_init
+    # Typical gem counts for a game (from GameConfig):
     bank = (
-        (Gem.RED, coin_default_init),
-        (Gem.BLUE, coin_default_init),
-        (Gem.WHITE, coin_default_init),
-        (Gem.BLACK, coin_default_init),
-        (Gem.GREEN, coin_default_init),
-        (Gem.GOLD, COIN_GOLD_INIT),
+      (Gem.RED, coin_default_init),
+      (Gem.BLUE, coin_default_init),
+      (Gem.WHITE, coin_default_init),
+      (Gem.BLACK, coin_default_init),
+      (Gem.GREEN, coin_default_init),
+      (Gem.GOLD, cfg.coin_gold_init),
     )
 
     visible_cards = tuple()
 
-    return GameState(players=tuple(players), bank_in=bank, visible_cards_in=visible_cards, turn=0)
+    return GameState(config=cfg, players=tuple(players), bank_in=bank, visible_cards_in=visible_cards, turn=0)
 
   def reset(self, num_players: int | None = None, names: list[str] | None = None) -> None:
     """Reset the engine's internal GameState.
@@ -214,7 +228,7 @@ class Engine:
       num_players = self._num_players
     if names is None:
       names = self._names
-    self._state = self.create_game(num_players, names)
+    self._state = self.create_game(num_players, names, self.config)
     self._num_players = num_players
     self._names = names
 
@@ -232,9 +246,9 @@ class Engine:
     print(f"Round: {self._state.round} Turn: {self._state.turn}")
     print("Players:")
     for p in self._state.players:
-      print(f"  seat={p.seat_id} name={p.name!r} score={p.score} gems={p.gems.normalized()} disconts={p.discounts.normalized()} cards={len(p.purchased_cards)} reserved={len(p.reserved_cards)}")
+      print(f"  seat={p.seat_id} name={p.name!r} score={p.score} gems={p.gems.normalized()} discounts={p.discounts.normalized()} cards={len(p.purchased_cards)} reserved={len(p.reserved_cards)}")
     print(f"Bank: {self._state.bank.normalized()}")
-    cards_table = ["%3d" % len(self.decks_by_level.get(lvl, ())) + "\t".join(["  {:25}".format(str(c)) for c in self._state.visible_cards.get_level(lvl)]) for lvl in CARD_LEVELS]
+    cards_table = ["%3d" % len(self.decks_by_level.get(lvl, ())) + "\t".join(["  {:25}".format(str(c)) for c in self._state.visible_cards.get_level(lvl)]) for lvl in self.config.card_levels]
     print(f"Visible cards:\n{'\n'.join([line for line in cards_table if line.strip() != '0'])}")
 
   def load_and_shuffle_assets(self, path: str | None = None) -> None:
