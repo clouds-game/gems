@@ -27,152 +27,154 @@ GemList = list(Gem)
 GEM_COUNT = len(GemIndex)
 
 
+class Take3Dict(TypedDict):
+  gems: NDArray1D[np.int8]
+  ret: NDArray1D[np.int8]
+
+class Take2Dict(TypedDict):
+  gem: NDArray1D[np.int8]
+  count: Scalar[np.int8]
+  ret: NDArray1D[np.int8]
+
+class BuyDict(TypedDict):
+  # flattened card index (0..visible+reserved-1)
+  card_idx: Scalar[np.int32]
+  payment: NDArray1D[np.int32]
+
+class ReserveDict(TypedDict):
+  card_idx: Scalar[np.int32]
+  take_gold: Scalar[np.int8]
+  ret: NDArray1D[np.int8]
+
+class ActionDict(TypedDict):
+  type: Scalar[np.int32]
+  take3: "Take3Dict"
+  take2: "Take2Dict"
+  buy: "BuyDict"
+  reserve: "ReserveDict"
+
+
+class Take3Space(spaces.Dict):
+  def __init__(self, config: GameConfig, *, seed = None, **spaces_kwargs):
+    super().__init__({
+      'gems': spaces.Box(low=0, high=1, shape=(config.gem_count,), dtype=np.int8),
+      'ret': spaces.Box(low=0, high=config.coin_max_count_per_player, shape=(config.gem_count,), dtype=np.int8),
+    }, seed, **spaces_kwargs)
+
+  @classmethod
+  def _encode(cls, data: "Take3Dict", action: Take3Action):
+    take3 = data
+    take3['gems'][...] = 0
+    for gem in action.gems:  # type: ignore[attr-defined]
+      take3['gems'][GemIndex[gem]] = 1
+    take3['ret'][...] = 0
+    for gem, amount in action.ret or ():
+      take3['ret'][GemIndex[gem]] = int(amount)
+
+  @classmethod
+  def _decode(cls, data: "Take3Dict") -> Take3Action:
+    gems_vec = data['gems']
+    gems = tuple(gem for gem, v in zip(GemList, gems_vec) if int(v) != 0)
+    ret_vec = data['ret']
+    ret = ActionSpace._decode_ret_gems(ret_vec)
+    return Take3Action.create(*gems, ret_map=ret)
+
+class Take2Space(spaces.Dict):
+  def __init__(self, config: GameConfig, *, seed = None, **spaces_kwargs):
+    super().__init__({
+      'gem': spaces.MultiBinary(config.gem_count),
+      'count': spaces.Discrete(3),
+      'ret': spaces.Box(low=0, high=config.coin_max_count_per_player, shape=(config.gem_count,), dtype=np.int8),
+    }, seed, **spaces_kwargs)
+
+  @classmethod
+  def _encode(cls, data: "Take2Dict", action: Take2Action):
+    take2 = data
+    take2['gem'][...] = 0
+    take2['gem'][GemIndex[action.gem]] = 1
+    take2['count'][...] = int(action.count)
+    take2['ret'][...] = 0
+    for gem_ret, amount in action.ret or ():
+      take2['ret'][GemIndex[gem_ret]] = int(amount)
+
+  @classmethod
+  def _decode(cls, data: "Take2Dict") -> Take2Action:
+    gem_vec = data['gem']
+    gem_idx = None
+    for i, v in enumerate(gem_vec):
+      if int(v) != 0:
+        gem_idx = i
+        break
+    if gem_idx is None:
+      raise ValueError("Invalid Take2 encoding: no gem selected")
+    gem = GemList[gem_idx]
+    count = int(data['count'])
+    ret = ActionSpace._decode_ret_gems(data['ret'])
+    return Take2Action.create(gem, count, ret_map=ret)
+
+class BuyCardSpace(spaces.Dict):
+  def __init__(self, config: GameConfig, *, seed = None, **spaces_kwargs):
+    super().__init__({
+      'card_idx': spaces.Discrete(config.card_visible_total_count + config.card_max_count_reserved + config.card_level_count),
+      'payment': spaces.Box(low=0, high=255, shape=(config.gem_count,), dtype=np.int32),
+    }, seed, **spaces_kwargs)
+
+  @classmethod
+  def _encode(cls, data: "BuyDict", action: BuyCardAction, owner: "ActionSpace"):
+    buy = data
+    buy['card_idx'][...] = 0
+    if action.idx is not None:
+      buy['card_idx'][...] = owner._flatten_card_idx(action.idx)
+    buy['payment'][...] = 0
+    for gem, amount in action.payment or ():
+      buy['payment'][GemIndex[gem]] = int(amount)
+
+  @classmethod
+  def _decode(cls, data: "BuyDict", owner: "ActionSpace") -> BuyCardAction:
+    flat = int(data['card_idx'])
+    idx = owner._unflatten_card_idx(flat)
+    pay_vec = data['payment']
+    payment = {GemList[i]: int(pay_vec[i]) for i in range(len(pay_vec)) if int(pay_vec[i]) > 0}
+    return BuyCardAction.create(idx, None, payment=payment)
+
+class ReserveCardSpace(spaces.Dict):
+  def __init__(self, config: GameConfig, *, seed = None, **spaces_kwargs):
+    super().__init__({
+      'card_idx': spaces.Discrete(config.card_visible_total_count + config.card_max_count_reserved + config.card_level_count),
+      'take_gold': spaces.Discrete(2),
+      'ret': spaces.Box(low=0, high=1, shape=(config.gem_count,), dtype=np.int8),
+    }, seed, **spaces_kwargs)
+
+  @classmethod
+  def _encode(cls, data: "ReserveDict", action: ReserveCardAction, owner: "ActionSpace"):
+    reserve = data
+    reserve['card_idx'][...] = 0
+    if action.idx is not None:
+      reserve['card_idx'][...] = owner._flatten_card_idx(action.idx)
+    reserve['take_gold'][...] = int(bool(action.take_gold))
+    reserve['ret'][...] = 0
+    if action.ret is not None:
+      reserve['ret'][GemIndex[action.ret]] = 1
+
+  @classmethod
+  def _decode(cls, data: "ReserveDict", owner: "ActionSpace") -> ReserveCardAction:
+    flat = int(data['card_idx'])
+    idx = owner._unflatten_card_idx(flat)
+    take_gold = bool(int(data['take_gold']))
+    _ret = ActionSpace._decode_ret_gems(data['ret'])
+    ret = None
+    for g in _ret or ():
+      ret = g
+      break
+    return ReserveCardAction.create(idx, None, take_gold=take_gold, ret=ret)
+
+
 class ActionSpace(spaces.Dict):
   """Structured encoding of Action objects for gymnasium agents.
 
   The `type` field selects which subset of data is meaningful for the action.
   Other subsets remain zeroed so a single dict shape can represent all actions.
   """
-
-  class Take3Space(spaces.Dict):
-    def __init__(self, config: GameConfig, *, seed = None, **spaces_kwargs):
-      super().__init__({
-        'gems': spaces.Box(low=0, high=1, shape=(config.gem_count,), dtype=np.int8),
-        'ret': spaces.Box(low=0, high=config.coin_max_count_per_player, shape=(config.gem_count,), dtype=np.int8),
-      }, seed, **spaces_kwargs)
-
-    @classmethod
-    def _encode(cls, data: "ActionSpace.Take3Dict", action: Take3Action):
-      take3 = data
-      take3['gems'][...] = 0
-      for gem in action.gems:  # type: ignore[attr-defined]
-        take3['gems'][GemIndex[gem]] = 1
-      take3['ret'][...] = 0
-      for gem, amount in action.ret or ():
-        take3['ret'][GemIndex[gem]] = int(amount)
-
-    @classmethod
-    def _decode(cls, data: "ActionSpace.Take3Dict") -> Take3Action:
-      gems_vec = data['gems']
-      gems = tuple(gem for gem, v in zip(GemList, gems_vec) if int(v) != 0)
-      ret_vec = data['ret']
-      ret = ActionSpace._decode_ret_gems(ret_vec)
-      return Take3Action.create(*gems, ret_map=ret)
-
-  class Take2Space(spaces.Dict):
-    def __init__(self, config: GameConfig, *, seed = None, **spaces_kwargs):
-      super().__init__({
-        'gem': spaces.MultiBinary(config.gem_count),
-        'count': spaces.Discrete(3),
-        'ret': spaces.Box(low=0, high=config.coin_max_count_per_player, shape=(config.gem_count,), dtype=np.int8),
-      }, seed, **spaces_kwargs)
-
-    @classmethod
-    def _encode(cls, data: "ActionSpace.Take2Dict", action: Take2Action):
-      take2 = data
-      take2['gem'][...] = 0
-      take2['gem'][GemIndex[action.gem]] = 1
-      take2['count'][...] = int(action.count)
-      take2['ret'][...] = 0
-      for gem_ret, amount in action.ret or ():
-        take2['ret'][GemIndex[gem_ret]] = int(amount)
-
-    @classmethod
-    def _decode(cls, data: "ActionSpace.Take2Dict") -> Take2Action:
-      gem_vec = data['gem']
-      gem_idx = None
-      for i, v in enumerate(gem_vec):
-        if int(v) != 0:
-          gem_idx = i
-          break
-      if gem_idx is None:
-        raise ValueError("Invalid Take2 encoding: no gem selected")
-      gem = GemList[gem_idx]
-      count = int(data['count'])
-      ret = ActionSpace._decode_ret_gems(data['ret'])
-      return Take2Action.create(gem, count, ret_map=ret)
-
-  class BuyCardSpace(spaces.Dict):
-    def __init__(self, config: GameConfig, *, seed = None, **spaces_kwargs):
-      super().__init__({
-        'card_idx': spaces.Discrete(config.card_visible_total_count + config.card_max_count_reserved + config.card_level_count),
-        'payment': spaces.Box(low=0, high=255, shape=(config.gem_count,), dtype=np.int32),
-      }, seed, **spaces_kwargs)
-
-    @classmethod
-    def _encode(cls, data: "ActionSpace.BuyDict", action: BuyCardAction, owner: "ActionSpace"):
-      buy = data
-      buy['card_idx'][...] = 0
-      if action.idx is not None:
-        buy['card_idx'][...] = owner._flatten_card_idx(action.idx)
-      buy['payment'][...] = 0
-      for gem, amount in action.payment or ():
-        buy['payment'][GemIndex[gem]] = int(amount)
-
-    @classmethod
-    def _decode(cls, data: "ActionSpace.BuyDict", owner: "ActionSpace") -> BuyCardAction:
-      flat = int(data['card_idx'])
-      idx = owner._unflatten_card_idx(flat)
-      pay_vec = data['payment']
-      payment = {GemList[i]: int(pay_vec[i]) for i in range(len(pay_vec)) if int(pay_vec[i]) > 0}
-      return BuyCardAction.create(idx, None, payment=payment)
-
-  class ReserveCardSpace(spaces.Dict):
-    def __init__(self, config: GameConfig, *, seed = None, **spaces_kwargs):
-      super().__init__({
-        'card_idx': spaces.Discrete(config.card_visible_total_count + config.card_max_count_reserved + config.card_level_count),
-        'take_gold': spaces.Discrete(2),
-        'ret': spaces.Box(low=0, high=1, shape=(config.gem_count,), dtype=np.int8),
-      }, seed, **spaces_kwargs)
-
-    @classmethod
-    def _encode(cls, data: "ActionSpace.ReserveDict", action: ReserveCardAction, owner: "ActionSpace"):
-      reserve = data
-      reserve['card_idx'][...] = 0
-      if action.idx is not None:
-        reserve['card_idx'][...] = owner._flatten_card_idx(action.idx)
-      reserve['take_gold'][...] = int(bool(action.take_gold))
-      reserve['ret'][...] = 0
-      if action.ret is not None:
-        reserve['ret'][GemIndex[action.ret]] = 1
-
-    @classmethod
-    def _decode(cls, data: "ActionSpace.ReserveDict", owner: "ActionSpace") -> ReserveCardAction:
-      flat = int(data['card_idx'])
-      idx = owner._unflatten_card_idx(flat)
-      take_gold = bool(int(data['take_gold']))
-      _ret = ActionSpace._decode_ret_gems(data['ret'])
-      ret = None
-      for g in _ret or ():
-        ret = g
-        break
-      return ReserveCardAction.create(idx, None, take_gold=take_gold, ret=ret)
-
-  class Take3Dict(TypedDict):
-    gems: NDArray1D[np.int8]
-    ret: NDArray1D[np.int8]
-
-  class Take2Dict(TypedDict):
-    gem: NDArray1D[np.int8]
-    count: Scalar[np.int8]
-    ret: NDArray1D[np.int8]
-
-  class BuyDict(TypedDict):
-    # flattened card index (0..visible+reserved-1)
-    card_idx: Scalar[np.int32]
-    payment: NDArray1D[np.int32]
-
-  class ReserveDict(TypedDict):
-    card_idx: Scalar[np.int32]
-    take_gold: Scalar[np.int8]
-    ret: NDArray1D[np.int8]
-
-  class ActionDict(TypedDict):
-    type: Scalar[np.int32]
-    take3: "ActionSpace.Take3Dict"
-    take2: "ActionSpace.Take2Dict"
-    buy: "ActionSpace.BuyDict"
-    reserve: "ActionSpace.ReserveDict"
 
   def __init__(self, config: GameConfig, *, seed = None):
     self._type_order = tuple(ActionType)
@@ -189,13 +191,13 @@ class ActionSpace(spaces.Dict):
     self._gem_count = config.gem_count
     super().__init__({
       'type': spaces.Discrete(len(self._type_order)),
-      'take3': ActionSpace.Take3Space(config, seed=seed),
-      'take2': ActionSpace.Take2Space(config, seed=seed),
-      'buy': ActionSpace.BuyCardSpace(config, seed=seed),
-      'reserve': ActionSpace.ReserveCardSpace(config, seed=seed),
+      'take3': Take3Space(config, seed=seed),
+      'take2': Take2Space(config, seed=seed),
+      'buy': BuyCardSpace(config, seed=seed),
+      'reserve': ReserveCardSpace(config, seed=seed),
     }, seed=seed)
 
-  def empty(self) -> "ActionSpace.ActionDict":
+  def empty(self) -> "ActionDict":
     return {
       'type': np.array(0, dtype=np.int32),
       'take3': {
@@ -218,20 +220,20 @@ class ActionSpace(spaces.Dict):
       },
     }
 
-  def encode(self, action: Action) -> "ActionSpace.ActionDict":
+  def encode(self, action: Action) -> "ActionDict":
     data = self.empty()
     data['type'][...] = self._type_index[action.type]
     if isinstance(action, Take3Action):
-      ActionSpace.Take3Space._encode(data["take3"], action)
+      Take3Space._encode(data["take3"], action)
       return data
     if isinstance(action, Take2Action):
-      ActionSpace.Take2Space._encode(data['take2'], action)
+      Take2Space._encode(data['take2'], action)
       return data
     if isinstance(action, BuyCardAction):
-      ActionSpace.BuyCardSpace._encode(data['buy'], action, self)
+      BuyCardSpace._encode(data['buy'], action, self)
       return data
     if isinstance(action, ReserveCardAction):
-      ActionSpace.ReserveCardSpace._encode(data['reserve'], action, self)
+      ReserveCardSpace._encode(data['reserve'], action, self)
       return data
     if action.type == ActionType.NOOP:
       return data
@@ -247,7 +249,7 @@ class ActionSpace(spaces.Dict):
       return int(self._visible_count + self._reserve_count + level)
     return -1
 
-  def encode_many(self, actions: Sequence[Action]) -> list["ActionSpace.ActionDict"]:
+  def encode_many(self, actions: Sequence[Action]) -> list["ActionDict"]:
     return [self.encode(action) for action in actions]
 
   def _unflatten_card_idx(self, flat: int) -> CardIdx | None:
@@ -273,7 +275,7 @@ class ActionSpace(spaces.Dict):
       return CardIdx(deck_head_level=level)
     return None
 
-  def decode(self, data: "ActionSpace.ActionDict") -> Action:
+  def decode(self, data: "ActionDict") -> Action:
     """Decode a structured ActionDict (as produced by `encode`) back into an Action object.
 
     This method simply dispatches to small, focused helpers for each
@@ -286,13 +288,13 @@ class ActionSpace(spaces.Dict):
     atype = self._type_order[tval]
 
     if atype == ActionType.TAKE_3_DIFFERENT:
-      return ActionSpace.Take3Space._decode(data['take3'])
+      return Take3Space._decode(data['take3'])
     if atype == ActionType.TAKE_2_SAME:
-      return ActionSpace.Take2Space._decode(data['take2'])
+      return Take2Space._decode(data['take2'])
     if atype == ActionType.BUY_CARD:
-      return ActionSpace.BuyCardSpace._decode(data['buy'], self)
+      return BuyCardSpace._decode(data['buy'], self)
     if atype == ActionType.RESERVE_CARD:
-      return ActionSpace.ReserveCardSpace._decode(data['reserve'], self)
+      return ReserveCardSpace._decode(data['reserve'], self)
     if atype == ActionType.NOOP:
       return Action.noop()
     raise ValueError(f"Unsupported action type for decode: {atype}")
@@ -311,7 +313,7 @@ class ActionSpace(spaces.Dict):
       return None
     return {GemList[i]: int(vec[i]) for i in range(len(vec)) if int(vec[i]) > 0}
 
-  def decode_many(self, actions: Sequence["ActionSpace.ActionDict"]) -> list[Action]:
+  def decode_many(self, actions: Sequence["ActionDict"]) -> list[Action]:
     return [self.decode(a) for a in actions]
 
 
