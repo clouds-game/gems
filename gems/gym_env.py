@@ -40,7 +40,7 @@ from gems.consts import CARD_VISIBLE_TOTAL_COUNT, CARD_LEVEL_COUNT, CARD_MAX_COU
 
 from .engine import Engine
 from .actions import Action
-from .typings import Gem, ActionType, Card
+from .typings import Gem, ActionType, Card, CardIdx
 from .consts import COIN_MAX_COUNT_PER_PLAYER
 from .agents.random import RandomAgent
 
@@ -200,8 +200,15 @@ class ActionSpace(spaces.Dict):
   def __init__(self, *, seed = None):
     self._type_order = tuple(ActionType)
     self._type_index = {atype: idx for idx, atype in enumerate(self._type_order)}
-    # max index space for cards = visible cards + reserved capacity (3)
-    self._max_card_index = CARD_VISIBLE_TOTAL_COUNT + CARD_MAX_COUNT_RESERVED
+    # max index space for cards = visible cards + reserved capacity (3) + deck head levels
+    # layout (flattened index):
+    # 0..(visible-1) => visible_idx
+    # visible..(visible+reserved-1) => reserve_idx (offset by visible)
+    # visible+reserved.. => deck_head_level (offset by visible+reserved), one entry per level
+    self._visible_count = CARD_VISIBLE_TOTAL_COUNT
+    self._reserve_count = CARD_MAX_COUNT_RESERVED
+    self._deck_levels = CARD_LEVEL_COUNT
+    self._max_card_index = self._visible_count + self._reserve_count + self._deck_levels
     super().__init__({
       'type': spaces.Discrete(len(self._type_order)),
       'take3': spaces.Dict({
@@ -276,8 +283,18 @@ class ActionSpace(spaces.Dict):
       return data
     if action.type == ActionType.BUY_CARD:
       buy = data['buy']
-      # encode card as simple index; without engine context default to 0
+      # encode CardIdx into a single integer index using the layout described above
       buy['card_idx'][...] = 0
+      if getattr(action, 'idx', None) is not None:
+        idx: CardIdx = action.idx  # type: ignore[assignment]
+        if idx.visible_idx is not None:
+          buy['card_idx'][...] = int(idx.visible_idx)
+        elif idx.reserve_idx is not None:
+          buy['card_idx'][...] = int(self._visible_count + int(idx.reserve_idx))
+        elif idx.deck_head_level is not None:
+          # deck_head_level expected 1..CARD_LEVEL_COUNT; map to 0-based
+          level = int(idx.deck_head_level) - 1
+          buy['card_idx'][...] = int(self._visible_count + self._reserve_count + level)
       buy['payment'][...] = 0
       for gem, amount in getattr(action, 'payment', ()):  # type: ignore[attr-defined]
         buy['payment'][GemIndex[gem]] = int(amount)
@@ -285,6 +302,15 @@ class ActionSpace(spaces.Dict):
     if action.type == ActionType.RESERVE_CARD:
       reserve = data['reserve']
       reserve['card_idx'][...] = 0
+      if getattr(action, 'idx', None) is not None:
+        idx: CardIdx = action.idx  # type: ignore[assignment]
+        if idx.visible_idx is not None:
+          reserve['card_idx'][...] = int(idx.visible_idx)
+        elif idx.reserve_idx is not None:
+          reserve['card_idx'][...] = int(self._visible_count + int(idx.reserve_idx))
+        elif idx.deck_head_level is not None:
+          level = int(idx.deck_head_level) - 1
+          reserve['card_idx'][...] = int(self._visible_count + self._reserve_count + level)
       take_gold = int(bool(getattr(action, 'take_gold', False)))  # type: ignore[attr-defined]
       reserve['take_gold'][...] = take_gold
       reserve['ret'][...] = 0
