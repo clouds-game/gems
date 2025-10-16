@@ -37,6 +37,7 @@ from gymnasium import spaces
 import numpy as np
 
 from gems.consts import CARD_VISIBLE_TOTAL_COUNT, CARD_LEVEL_COUNT, CARD_MAX_COUNT_RESERVED
+from gems.state import PlayerState
 
 from .engine import Engine
 from .actions import Action, BuyCardAction, ReserveCardAction, Take2Action, Take3Action
@@ -49,9 +50,9 @@ GemIndex = {g: i for i, g in enumerate(Gem)}  # order: enum definition order
 GEM_COUNT = len(GemIndex)
 
 
-def default_reward_fn(prev_score: int, new_score: int) -> float:
+def default_reward_fn(prev_state: PlayerState, new_state: PlayerState) -> float:
   """Default reward: delta in controlled player's score."""
-  return float(new_score - prev_score)
+  return float(new_state.score - prev_state.score)
 
 
 class StateSpace(spaces.Dict):
@@ -443,7 +444,7 @@ class GemEnv(gym.Env):
                seat_id: int = 0,
                max_actions: int = 128,
                seed: int | None = None,
-               reward_fn: Callable[[int, int], float] | None = None,
+               reward_fn: Callable[[PlayerState, PlayerState], float] | None = None,
                opponents: Sequence[Any] | None = None):
     super().__init__()
     if seat_id < 0 or seat_id >= num_players:
@@ -515,6 +516,7 @@ class GemEnv(gym.Env):
       # Should not happen (noop fallback exists) but guard anyway
       raise RuntimeError("No legal actions available for current player")
     chosen_action = None
+    penalty = 0
     # Accept integer index (legacy), Action objects, or structured action dicts
     if isinstance(action, int):
       if action >= 0 and action < len(legal):
@@ -528,6 +530,7 @@ class GemEnv(gym.Env):
       if isinstance(action, Action):
         chosen_action = action
     if chosen_action is None:
+      penalty = -0.1  # small penalty for invalid action
       chosen_action = Action.noop()  # fallback noop
     # Apply chosen action
     new_state = chosen_action.apply(state)
@@ -538,7 +541,7 @@ class GemEnv(gym.Env):
     self._play_opponents_until_our_turn()
     # Observation / reward
     new_player = self._engine.get_state().players[self.seat_id]
-    reward = self._reward_fn(prev_score, new_player.score)
+    reward = self._reward_fn(player, new_player) + penalty
     terminated = self._engine.game_end()
     truncated = False
     obs = self._state_space.make_obs(self._engine, self.seat_id)
