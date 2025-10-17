@@ -149,15 +149,6 @@ possible purchases.
 3. Support reset(seed) for determinism.
 4. Add unit tests for determinism and legality.
 
----
-
-If you want, I can now:
-
-- Add `gems/agents/random_agent.py` and `gems/agents/greedy_agent.py` with
-    minimal implementations and tests.
-- Add a small test harness under `tests/test_agents.py` and run pytest.
-
-Tell me which next step you'd like.
 
 <!--
 The following instruction are written by user and should be KEPT as is.
@@ -166,8 +157,9 @@ The following instruction are written by user and should be KEPT as is.
 - TAKE CARE OF THE INDENTATION.
 - All Python code should have indentation of 2 spaces per level.
 - we don't use `if __name__ == "__main__":` or cli in our code.
-- we use `# %%` to split cells in scripts for vscode, consider it as a notebook.
+- for files in folder `scripts`, we use `# %%` to split cells in scripts for vscode, consider it as a notebook.
 - use PEP 585 style generics, e.g. `list[int]` instead of `List[int]`. And using `collections.abc` if applicable.
+- use `T | None` instead of `Optional[T]`, use `collections.abc` instead of `typing` if applicable.
 
 # General
 - You could run `uv add` to add some dependencies when needed.

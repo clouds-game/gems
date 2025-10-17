@@ -23,11 +23,14 @@ the number of True entries in mask.
 from __future__ import annotations
 
 import numpy as np
-from typing import Optional
+from typing import Optional, TypeVar
+from collections.abc import Sequence
+
+T = TypeVar("T")
 
 # %%
-def sample_exact(n: int, mask, p, *, x: Optional[int] = None, replacement: bool = False) -> np.ndarray:
-  """Sample indices from a weighted distribution with mask support.
+def sample_exact(n: int, mask, p, *, x: Sequence[T] | None = None, replacement: bool = False, seed: Optional[int] = None) -> np.ndarray:
+  """Sample indices or population elements from a weighted distribution with mask support.
 
   Behaviour details:
   - `mask` is interpreted as a boolean array-like. Entries where mask is
@@ -39,17 +42,32 @@ def sample_exact(n: int, mask, p, *, x: Optional[int] = None, replacement: bool 
   - If `replacement` is False, at most `available` distinct indices are
     returned (size = min(n, available)). When `replacement` is True the
     returned length equals `n`.
-  - `x` if provided seeds a local RNG (numpy.default_rng(x)).
+  - If `x` is provided it must be a sequence of the same length as
+    `mask`/`p` and the function returns elements from `x` corresponding
+    to the chosen indices. If `x` is None the function returns the
+    chosen indices (dtype int).
   """
   mask_arr = np.asarray(mask, dtype=bool)
   p_arr = np.asarray(p, dtype=float)
   if mask_arr.ndim != 1 or p_arr.ndim != 1 or mask_arr.shape[0] != p_arr.shape[0]:
     raise ValueError("mask and p must be 1-D arrays of the same length")
 
+  # validate population length matches mask/p if provided
+  if x is not None:
+    try:
+      x_len = len(x)
+    except Exception:
+      raise ValueError("x must be a sequence with a length")
+    if x_len != mask_arr.shape[0]:
+      raise ValueError("x (population) must have the same length as mask and p")
+
   available = np.flatnonzero(mask_arr)
   if available.size == 0:
-    # nothing available -> return empty
-    return np.array([], dtype=np.int64)
+    # nothing available -> return empty (indices or population dtype)
+    if x is None:
+      return np.array([], dtype=np.int64)
+    x_arr = np.asarray(x)
+    return np.array([], dtype=x_arr.dtype)
 
   weights = p_arr[available].copy()
   total = float(np.nansum(weights))
@@ -58,19 +76,30 @@ def sample_exact(n: int, mask, p, *, x: Optional[int] = None, replacement: bool 
   else:
     weights = weights / total
 
-  rng = np.random.default_rng(x) if x is not None else np.random.default_rng()
+  rng = np.random.default_rng(seed) if seed is not None else np.random.default_rng()
 
   if replacement:
-    chosen = rng.choice(available, size=int(n), replace=True, p=weights)
+    chosen_idx = rng.choice(available, size=int(n), replace=True, p=weights)
   else:
-    non_zero_count = np.count_nonzero(weights) if weights is not None else available.size
-    take_count = int(min(n, non_zero_count))
+    take_count = int(min(n, available.size))
     if take_count <= 0:
-      return np.array([], dtype=np.int64)
-    # when not replacing, use choice with replace=False. numpy will raise if
-    # take_count > available.size but we already capped it.
-    chosen = rng.choice(available, size=take_count, replace=False, p=weights)
+      # return empty array of appropriate dtype
+      if x is None:
+        return np.array([], dtype=np.int64)
+      x_arr = np.asarray(x)
+      return np.array([], dtype=x_arr.dtype)
+    # If there are fewer positive-weight entries than requested without
+    # replacement, return as many positive-weight items as possible
+    positive = int(np.count_nonzero(weights > 0.0))
+    if positive < take_count:
+      take_count = positive
+    chosen_idx = rng.choice(available, size=take_count, replace=False, p=weights)
 
-  return np.asarray(chosen, dtype=np.int64)
+  # If x provided, map chosen indices back to population elements.
+  if x is None:
+    return np.asarray(chosen_idx, dtype=np.int64)
+  x_arr = np.asarray(x)
+  result = x_arr[chosen_idx]
+  return np.asarray(result)
 
 __all__ = ["sample_exact"]
