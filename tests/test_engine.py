@@ -38,6 +38,9 @@ def test_serialize_deserialize_replay_roundtrip():
   e1._action_history.append(act)
 
   data = e1.serialize()
+  # ensure config field present and contains expected num_players
+  assert 'config' in data
+  assert data['config']['num_players'] == 2
   e2 = Engine.deserialize(data)
   # after deserialize the actions should be staged for replay
   assert hasattr(e2, '_actions_to_replay')
@@ -57,7 +60,15 @@ def test_serialize_deserialize_assets_roundtrip():
   roles1 = list(e1.roles_deck)
 
   data = e1.serialize()
+  assert 'config' in data
+  assert data['config']['num_players'] == 3
   e2 = Engine.deserialize(data)
+  # config roundtrip: serialized then deserialized config should match values
+  cfg1 = e1.config
+  cfg2 = e2.config
+  assert cfg1.num_players == cfg2.num_players
+  assert cfg1.coin_init == cfg2.coin_init
+  assert cfg1.card_levels == cfg2.card_levels
   # after deserialize the assets should be available on the engine
   # (Engine.new called during deserialize uses the same seed)
   assert isinstance(e2.decks_by_level, dict)
