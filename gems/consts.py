@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from pydantic.dataclasses import dataclass as pydantic_dataclass
-
+from dataclasses import asdict
 
 # COIN_MAX_COUNT_PER_PLAYER = 10
 # COIN_MIN_COUNT_TAKE2_IN_DECK = 4
@@ -48,3 +48,10 @@ class GameConfig:
   @property
   def card_visible_total_count(self) -> int:
     return self.card_visible_count * self.card_level_count
+
+  def serialize(self) -> dict:
+    return asdict(self)
+
+  @classmethod
+  def deserialize(cls, data: dict) -> 'GameConfig':
+    return cls(**data)

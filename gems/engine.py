@@ -135,6 +135,7 @@ class Engine:
 
     return {
       'num_players': self._num_players,
+      'config': self.config.serialize(),
       'names': self._names,
       'seed': self._seed,
       'action_history': [a.serialize() for a in self._action_history],
@@ -153,12 +154,16 @@ class Engine:
     num_players = d.get('num_players')
     if num_players is None:
       raise ValueError("deserialize requires 'num_players' field")
+    config_dict = d.get('config')
+    if config_dict is None:
+      raise ValueError("deserialize requires 'config' field")
+    config = GameConfig.deserialize(config_dict)
     num_players = int(num_players)
     names = d.get('names')
     seed = d.get('seed', None)
     if seed is not None:
       seed = int(seed)
-    engine = cls.new(num_players=num_players, names=names, seed=seed)
+    engine = cls.new(num_players=num_players, names=names, seed=seed, config=config)
     raw_actions = d.get('action_history', []) or []
     actions: list[Action] = []
     for a in raw_actions:
