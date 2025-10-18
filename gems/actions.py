@@ -235,6 +235,8 @@ class Take3Action(Action):
       max_return = total + max_take - config.coin_max_count_per_player
       for return_num in range(0, max_return + 1):
         take_num = config.coin_max_count_per_player + return_num - total
+        if take_num == 0:
+          continue
         combos = combinations(available, take_num)
         for combo in combos:
           ret_available = [[g] * amt for g, amt in player.gems if g not in combo and g != Gem.GOLD]
