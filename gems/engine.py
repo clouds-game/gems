@@ -172,15 +172,6 @@ class Engine:
     engine._actions_to_replay = actions
     return engine
 
-  def apply_replay(self) -> list[GameState]:
-    """(Deprecated) Use `Engine.apply()` instead.
-
-    This method is retained for backward compatibility and delegates to
-    `apply()` with no explicit actions which triggers replay of any
-    pending deserialized actions.
-    """
-    return self.replay()
-
   def replay(self, actions: Sequence[Action] | None = None) -> list[GameState]:
     """Apply a sequence of actions to the engine, returning intermediate states.
 
@@ -213,11 +204,10 @@ class Engine:
       to_apply = list(actions)
     state_list: list[GameState] = [self._state]
     for action in to_apply:
-      state_new = action.apply(self._state)
-      self._state = state_new
-      state_list.append(state_new)
-      self._action_history.append(action)
+      self._state = action.apply(self._state)
       self.advance_turn()
+      self._action_history.append(action)
+      state_list.append(self._state)
     if actions is None:
       # clear replay buffer only when we consumed it implicitly
       self._actions_to_replay = []
