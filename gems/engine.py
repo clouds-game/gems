@@ -172,25 +172,56 @@ class Engine:
     engine._actions_to_replay = actions
     return engine
 
-  def apply_replay(self) -> None:
-    """Apply any deserialized actions stored in `_actions_to_replay`.
+  def apply_replay(self) -> list[GameState]:
+    """(Deprecated) Use `Engine.apply()` instead.
 
-    Actions are applied in order to the current GameState using
-    Action.apply(...). Each successfully-applied action is appended to
-    `_action_history`. After application the `_actions_to_replay` list is
-    cleared.
-
-    Raises ValueError if any action cannot be applied for the current
-    state/player.
+    This method is retained for backward compatibility and delegates to
+    `apply()` with no explicit actions which triggers replay of any
+    pending deserialized actions.
     """
-    for action in list(self._actions_to_replay):
-      # validate and apply
-      state_before = self._state
-      self._state = action.apply(state_before)
+    return self.replay()
+
+  def replay(self, actions: Sequence[Action] | None = None) -> list[GameState]:
+    """Apply a sequence of actions to the engine, returning intermediate states.
+
+    Parameters:
+      actions: Optional sequence of `Action` objects to apply in order. If
+        omitted (or None) the engine will apply any actions stored in the
+        internal replay buffer (`_actions_to_replay`), which is the list of
+        actions produced by `Engine.deserialize`.
+
+    Behavior:
+      - The first element of the returned list is the current state *before*
+        any actions are applied.
+      - Each subsequent element is the new immutable `GameState` after that
+        action has been applied.
+      - Successfully applied actions are appended to `_action_history`.
+      - When replaying (actions is None) the `_actions_to_replay` buffer is
+        cleared after successful application.
+
+    Returns:
+      list[GameState]: `[state_before, state_after_action1, ...]`.
+
+    Raises:
+      ValueError: if any action cannot be applied to the current state.
+    """
+    to_apply: list[Action]
+    if actions is None:
+      # use (and then clear) replay buffer
+      to_apply = list(self._actions_to_replay)
+    else:
+      to_apply = list(actions)
+    state_list: list[GameState] = [self._state]
+    for action in to_apply:
+      state_new = action.apply(self._state)
+      self._state = state_new
+      state_list.append(state_new)
       self._action_history.append(action)
       self.advance_turn()
-    # clear replay buffer
-    self._actions_to_replay = []
+    if actions is None:
+      # clear replay buffer only when we consumed it implicitly
+      self._actions_to_replay = []
+    return state_list
 
   @staticmethod
   def create_game(num_players: int = 4, names: list[str] | None = None, config: GameConfig | None = None) -> GameState:

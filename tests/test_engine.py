@@ -46,7 +46,10 @@ def test_serialize_deserialize_replay_roundtrip():
   assert hasattr(e2, '_actions_to_replay')
   assert len(e2._actions_to_replay) == 1
   # now apply replay and ensure states and histories match
-  e2.apply_replay()
+  states = e2.replay()  # replay pending action(s)
+  # should return initial + one new state
+  assert len(states) == 2
+  assert states[-1] == e1.get_state()
   assert e2.get_state() == e1.get_state()
 
 
