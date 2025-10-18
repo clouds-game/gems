@@ -39,8 +39,9 @@ def test_sample_exact_empty_mask_returns_zero_counts():
 def test_sample_exact_nonfinite_weights_raises():
   mask = [True, True, True]
   p = [np.nan, np.inf, -np.inf]
-  with np.testing.assert_raises(ValueError):
-    sample_exact(3, 2, mask=mask, p=p, replacement=False, seed=7)
+  s = sample_exact(3, 2, mask=mask, p=p, replacement=False, seed=7)
+  assert s.size == 3
+  assert int(s.sum()) == 1
 
 
 def test_sample_exact_shape_mismatch_raises():
@@ -73,3 +74,15 @@ def test_sample_exact_indices_empty_mask_returns_empty():
   s = sample_exact_idx(3, p, replacement=True, rng=np.random.default_rng(0))
   assert s.size == 0
   assert s.dtype == np.int64 or np.issubdtype(s.dtype, np.integer)
+
+def test_sample_take3():
+  from gems.gym.action_space import Take3Space
+  from gems.consts import GameConfig
+
+  space = Take3Space(GameConfig(), seed=123)
+
+  a = space.sample()
+  assert a['gems_count'] == 3
+  assert a['ret_count'] == 3
+  assert np.all(a['gems'] == [1, 1, 0, 0, 1, 0])
+  assert np.all(a['ret'] == [1, 0, 0, 0, 0, 2])

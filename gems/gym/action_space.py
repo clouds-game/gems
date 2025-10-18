@@ -6,7 +6,7 @@ RL agents and gymnasium interfaces.
 """
 from __future__ import annotations
 
-from typing import TypeAlias, TypeVar, Sequence, TypedDict, cast
+from typing import Any, TypeAlias, TypeVar, Sequence, TypedDict, cast, Generic
 
 import numpy as np
 from gymnasium import spaces
@@ -16,6 +16,7 @@ from ..typings import Gem, ActionType, CardIdx
 from ..consts import GameConfig
 
 from ._common import NDArray1D, Scalar
+from .sampling import sample_exact
 
 
 GemIndex = {g: i for i, g in enumerate(Gem)}  # order: enum definition order
@@ -23,9 +24,14 @@ GemList = list(Gem)
 GEM_COUNT = len(GemIndex)
 
 
-class Take3Dict(TypedDict):
-  gems: NDArray1D[np.int8]
-  ret: NDArray1D[np.int8]
+# Generic scalar type for array elements; default to np.int8 for backward compat
+T = TypeVar('T', bound=np.generic, default=np.int8)
+
+class Take3Dict(TypedDict, Generic[T]):
+  gems_count: Scalar[T]
+  ret_count: Scalar[T]
+  gems: NDArray1D[T]
+  ret: NDArray1D[T]
 
 class Take2Dict(TypedDict):
   gem: NDArray1D[np.int8]
@@ -52,20 +58,28 @@ class ActionDict(TypedDict):
 
 class Take3Space(spaces.Dict):
   def __init__(self, config: GameConfig, *, seed = None, **spaces_kwargs):
+    self._gems = spaces.Box(low=0, high=1, shape=(config.gem_count,), dtype=np.int8)
+    self._ret = spaces.Box(low=0, high=config.coin_max_count_per_player, shape=(config.gem_count,), dtype=np.int8)
     super().__init__({
-      'gems': spaces.Box(low=0, high=1, shape=(config.gem_count,), dtype=np.int8),
-      'ret': spaces.Box(low=0, high=config.coin_max_count_per_player, shape=(config.gem_count,), dtype=np.int8),
+      'gems_count': spaces.Box(1, 4),
+      'ret_count': spaces.Box(1, 4),
+      'gems': self._gems,
+      'ret': self._ret,
     }, seed, **spaces_kwargs)
 
   @classmethod
   def _encode(cls, data: "Take3Dict", action: Take3Action):
     take3 = data
     take3['gems'][...] = 0
-    for gem in action.gems:  # type: ignore[attr-defined]
+    for gem in action.gems:
       take3['gems'][GemIndex[gem]] = 1
+    take3['gems_count'][...] = len(action.gems)
     take3['ret'][...] = 0
+    ret_count = 0
     for gem, amount in action.ret or ():
+      ret_count += amount
       take3['ret'][GemIndex[gem]] = int(amount)
+    take3['ret_count'][...] = ret_count
 
   @classmethod
   def _decode(cls, data: "Take3Dict") -> Take3Action:
@@ -74,6 +88,29 @@ class Take3Space(spaces.Dict):
     ret_vec = data['ret']
     ret = ActionSpace._decode_ret_gems(ret_vec)
     return Take3Action.create(*gems, ret_map=ret)
+
+  def _sample(self, mask: Take3Dict[np.bool] | None = None, probability: Take3Dict[np.floating] | None = None) -> Take3Dict:
+    gems_mask = mask['gems'] if mask is not None else None
+    gems_p = probability['gems'] if probability is not None else None
+
+    ret_mask = mask['ret'] if mask is not None else None
+    ret_p = probability['ret'] if probability is not None else None
+
+    gems_sampled = sample_exact(GEM_COUNT, 3, dtype=np.int8, mask=gems_mask, p=gems_p, replacement=False, rng=self._gems._np_random)
+    gems_count = int(gems_sampled.sum())
+
+    ret_count = self.np_random.integers(0, gems_count + 1)
+    ret_sampled = sample_exact(GEM_COUNT, int(ret_count), dtype=np.int8, mask=ret_mask, p=ret_p, replacement=True, rng=self._gems._np_random)
+
+    return {
+      'gems_count': np.array(gems_count, dtype=np.int8),
+      'ret_count': np.array(ret_count, dtype=np.int8),
+      'gems': gems_sampled,
+      'ret': ret_sampled,
+    }
+
+  def sample(self, mask = None, probability = None) -> dict[str, Any]:
+    return self._sample(mask=mask, probability=probability) # type: ignore[TypedDict]
 
 class Take2Space(spaces.Dict):
   def __init__(self, config: GameConfig, *, seed = None, **spaces_kwargs):
@@ -197,6 +234,8 @@ class ActionSpace(spaces.Dict):
     return {
       'type': np.array(0, dtype=np.int32),
       'take3': {
+        'gems_count': np.array(0, dtype=np.int8),
+        'ret_count': np.array(0, dtype=np.int8),
         'gems': np.zeros(self._gem_count, dtype=np.int8),
         'ret': np.zeros(self._gem_count, dtype=np.int8),
       },

@@ -6,7 +6,7 @@ from gems.gym._common import NDArray1D, _ScalarT
 
 T = _ScalarT
 
-def sample_exact(total: int, n: int, *, dtype=np.int64, mask: Sequence[bool] | None = None, p: Sequence[float] | None = None, replacement: bool = False, seed: int | None = None, rng: np.random.Generator | None = None):
+def sample_exact(total: int, n: int, *, dtype: type[T] = np.int64, mask: Sequence[bool] | np.ndarray | None = None, p: Sequence[float] | np.ndarray | None = None, replacement: bool = False, seed: int | None = None, rng: np.random.Generator | None = None) -> NDArray1D[T]:
   """Sample indices or population elements from a weighted distribution with mask support.
 
   Behaviour details:
@@ -44,14 +44,18 @@ def sample_exact(total: int, n: int, *, dtype=np.int64, mask: Sequence[bool] | N
   return result
 
 def sample_exact_idx(n: int, p: np.ndarray, *, replacement: bool = False, rng: np.random.Generator) -> NDArray1D[np.int64]:
+  if any(p == np.inf):
+    # all +inf weights treated as uniform
+    p = np.where(p == np.inf, 1.0, 0.0)
   available = np.flatnonzero(p > 0)
   if available.size == 0:
     return np.array([], dtype=np.int64)
 
   weights = p[available]
   total = float(weights.sum())
-  if not np.isfinite(total) or total <= 0.0:
+  if total <= 0.0:
     raise ValueError("Weights must be non-negative and not all zero")
+  weights /= total
 
   if replacement:
     chosen_idx = rng.choice(available, size=int(n), replace=True, p=weights)
