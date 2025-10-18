@@ -37,23 +37,20 @@ def test_sample_exact_empty_mask_returns_empty():
   assert s.size == 0
 
 
-def test_sample_exact_nonfinite_weights_uses_uniform():
+def test_sample_exact_nonfinite_weights_raises():
   pop = [20, 21, 22]
   mask = [True, True, True]
   p = [np.nan, np.inf, -np.inf]
-  s = sample_exact(2, mask, p, x=pop, replacement=False, seed=7)
-  assert len(s) == 2
+  with np.testing.assert_raises(ValueError):
+    sample_exact(2, mask, p, x=pop, replacement=False, seed=7)
 
 
 def test_sample_exact_shape_mismatch_raises():
   pop = [1, 2]
   mask = [True, True]
   p = [1.0]
-  try:
+  with np.testing.assert_raises(ValueError):
     sample_exact(1, mask, p, x=pop)
-  except ValueError:
-    return
-  raise AssertionError("Expected ValueError for mask/p length mismatch")
 
 
 def test_sample_exact_indices_reproducible():
