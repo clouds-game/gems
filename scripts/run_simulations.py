@@ -1,15 +1,18 @@
 # %%
-from tqdm import tqdm
+from tqdm.notebook import tqdm
 from _common import RES_DIR
 
 import json
 from pathlib import Path
 
 from gems.agents.core import Agent, BaseAgent
+from gems.consts import GameConfig
 from gems.engine import Engine
 from gems.agents.random import RandomAgent
 from gems.agents.greedy import GreedyAgent
 import matplotlib.pyplot as plt
+
+from gems.state import GameState
 # %%
 
 Simulation_Dir = RES_DIR / "simulations"
@@ -17,17 +20,18 @@ RandomAgentFile = Simulation_Dir / "RandomAgent.jsonl"
 GreedyAgentFile = Simulation_Dir / "GreedyAgent.jsonl"
 
 
-def run_simulations(n: int, agents: list[BaseAgent]) -> list[Engine]:
+def run_simulations(n: int, config: GameConfig, agent_cls: type[BaseAgent]) -> list[Engine]:
   """Run `n` independent games using `agents` for each seat.
   - n: number of full rounds to play (each run starts a fresh Engine)
   - agents: list of agents, one per player seat.
   """
 
-  num_players = len(agents)
+  num_players = config.num_players
+  agents = [agent_cls(seat_id=i) for i in range(num_players)]
   engines = []
   for i in tqdm(range(n), desc="Running simulations"):
     seed = 1234 + i
-    engine = Engine.new(num_players=num_players, seed=seed)
+    engine: Engine = Engine.new(num_players=num_players, seed=seed, config=config)
     while not engine.game_end():
       engine.play_one_round(agents=agents, debug=False)
     engines.append(engine)
@@ -50,58 +54,99 @@ def load_engines(input_file: Path) -> list[Engine]:
 # %%
 
 
-def play_and_save(n_games: int, agent_cls):
-  n_games = 5
-  agents = [agent_cls(seat_id=0)]
-  engines = run_simulations(n_games, agents)
-
-  save_file: Path | None = None
+def _get_save_file(agent_cls: type[BaseAgent], num_players: int) -> Path:
+  """Get the save file path for a specific agent class and number of players."""
   match agent_cls:
     case _ if issubclass(agent_cls, RandomAgent):
-      save_file = RandomAgentFile
+      return Simulation_Dir / f"random_agent_{num_players}_players.jsonl"
     case _ if issubclass(agent_cls, GreedyAgent):
-      save_file = GreedyAgentFile
+      return Simulation_Dir / f"greedy_agent_{num_players}_players.jsonl"
     case _:
       raise ValueError(f"Unsupported agent class: {agent_cls}")
-  if not save_file:
-    raise ValueError("No save file specified")
+
+
+def play_and_save(n_games: int, agent_cls: type[BaseAgent], num_players: int) -> None:
+  config = GameConfig(num_players=num_players)
+  engines = run_simulations(n_games, config, agent_cls)
+  save_file = _get_save_file(agent_cls, num_players)
   save_engines(engines, save_file)
 
 
-def _display_cards(engine: Engine):
-  print("Visible cards:")
-  for card in engine._state.visible_cards:
-    print(card)
-  print("Decks")
-  for lvl, cards in engine.decks_by_level.items():
-    print(f"Level {lvl}: {len(cards)} cards")
-    for card in cards:
-      print(f"  {card}")
-
-
-def get_score_lists(path: Path):
-  engines = load_engines(path)
-  score_lists: list[list[int]] = []
+def load_and_replay(agent_cls: type[BaseAgent], num_players: int) -> list[list[GameState]]:
+  save_file = _get_save_file(agent_cls, num_players)
+  engines = load_engines(save_file)
+  states_list: list[list[GameState]] = []
   for engine in tqdm(engines, desc="replay game"):
-    scores: list[int] = []
-    for action in engine._actions_to_replay:
-      state_before = engine.get_state()
-      engine._state = action.apply(state_before)
-      engine._action_history.append(action)
-      engine.advance_turn()
-      scores.append(engine._state.players[0].score)
-    engine._actions_to_replay = []
-    score_lists.append(scores)
-  return score_lists
+    states = engine.replay()
+    states_list.append(states)
+  return states_list
+
+
 # %%
-# play_and_save(5, GreedyAgent)
-# play_and_save(5, RandomAgent)
+# play_and_save(5, GreedyAgent, num_players=1)
+# play_and_save(5, RandomAgent, num_players=1)
 
 
 # %%
 
+def _extract_scores(states_list: list[list[GameState]], seat_id: int) -> list[list[int]]:
+  scores_list: list[list[int]] = []
+  for states in states_list:
+    scores: list[int] = [state.players[seat_id].score for state in states]
+    scores_list.append(scores)
+  return scores_list
 
-def plot_score_lists(score_lists: list[list[int]] | list[list[float]], labels: list[str] | None = None) -> None:
+
+def single_player_extract_scores(states_list: list[list[GameState]]) -> list[list[int]]:
+  return _extract_scores(states_list, seat_id=0)
+
+
+def _average_scores(scores_list: list[list[int]]) -> list[float]:
+  max_len = max(len(scores) for scores in scores_list)
+  averages: list[float] = []
+  for turn in range(max_len):
+    # gather scores for this turn from games that lasted at least this long
+    vals: list[int] = [scores[turn] if len(scores) > turn else scores[-1] for scores in scores_list]
+    averages.append(sum(vals) / len(vals))
+  return averages
+
+
+def single_player_extract_average_scores(states_list: list[list[GameState]]) -> list[float]:
+  """Compute per-turn average scores across multiple games.
+  - states_list: list of game states (one per game). Games may have
+    different lengths; shorter games contribute only to their existing turns.
+
+  Returns a list of floats where element i is the average score at turn i+1.
+  """
+  if not states_list:
+    return []
+  scores_list = single_player_extract_scores(states_list)
+  return _average_scores(scores_list)
+
+
+def multiplayer_extract_average_scores(states_list: list[list[GameState]]) -> list[list[float]]:
+  """Compute per-turn average scores for each player across multiple games.
+  - states_list: list of game states (one per game). Games may have
+    different lengths; shorter games contribute only to their existing turns.
+
+  Returns a list of lists where element i is a list of average scores
+  for each player at turn i+1.
+  """
+  if not states_list:
+    return []
+  num_players = len(states_list[0][0].players)
+
+  avg_scores_list = []
+  for seat_id in range(num_players):
+    scores_list = _extract_scores(states_list, seat_id)
+    avg_scores = _average_scores(scores_list)
+    avg_scores_list.append(avg_scores)
+  return avg_scores_list
+
+# %%
+
+
+def plot_scores(score_lists: list[list[int]] | list[list[float]], labels: list[str] | None = None) -> None:
   """Plot score progress for each replay using matplotlib.
   - score_lists: list of score sequences (one per game)
   """
@@ -113,48 +158,29 @@ def plot_score_lists(score_lists: list[list[int]] | list[list[float]], labels: l
   # plt.figure(figsize=(8, 4 + len(score_lists) * 0.5))
   for scores, label in zip(score_lists, labels):
     x = list(range(1, len(scores) + 1))
-    plt.plot(x, scores, marker="o", label=label)
+    plt.plot(x, scores, marker=".", label=label)
 
   plt.xlabel("Turn")
   plt.ylabel("Score")
   plt.title("Score over turn")
   plt.legend(loc="upper left")
   plt.grid(True, linestyle="--", alpha=0.4)
-
   plt.show()
 
-
 # %%
 
 
-def average_score_lists(score_lists: list[list[int]]) -> list[float]:
-  """Compute per-turn average scores across multiple games.
-  - score_lists: list of score sequences (one per game). Games may have
-    different lengths; shorter games contribute only to their existing turns.
-
-  Returns a list of floats where element i is the average score at turn i+1.
-  """
-  if not score_lists:
-    return []
-  # find the maximum length among the provided score sequences
-  max_len = max(len(s) for s in score_lists)
-
-  averages: list[float] = []
-  for turn in range(max_len):
-    # gather scores for this turn from games that lasted at least this long
-    vals: list[int] = [s[turn] if len(s) > turn else s[-1] for s in score_lists]
-    averages.append(sum(vals) / len(vals))
-  return averages
-
+# %%
+greedy_states_list = load_and_replay(GreedyAgent, num_players=1)
+random_states_list = load_and_replay(RandomAgent, num_players=1)
+plot_scores(single_player_extract_scores(greedy_states_list))
+plot_scores(single_player_extract_scores(random_states_list))
+plot_scores([
+    single_player_extract_average_scores(greedy_states_list),
+    single_player_extract_average_scores(random_states_list)
+], labels=["Greedy", "Random"])
 
 # %%
-greedy_score_lists = get_score_lists(GreedyAgentFile)
-greedy_average_scores = average_score_lists(greedy_score_lists)
-
-random_score_lists = get_score_lists(RandomAgentFile)
-random_average_scores = average_score_lists(random_score_lists)
-plot_score_lists(greedy_score_lists)
-plot_score_lists(random_score_lists)
-plot_score_lists([greedy_average_scores, random_average_scores], labels=["Greedy", "Random"])
-
+plot_scores(multiplayer_extract_average_scores(load_and_replay(
+    GreedyAgent, num_players=3)), labels=["Player 1", "Player 2", "Player 3"])
 # %%
