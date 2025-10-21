@@ -166,7 +166,6 @@ class Take3Action(Action):
     # Mutable working copies: convert GemList/tuples into mutable dicts/lists
     bank = dict(state.bank)
     player_gems = dict(player.gems)
-    visible_cards = list(state.visible_cards)
 
     # remove one of each requested gem from bank and add to player's gems
     for g in self.gems:
@@ -186,7 +185,7 @@ class Take3Action(Action):
     players = _replace_tuple(state.players, player.seat_id, new_player)
 
     return GameState(config=state.config, players=players, bank_in=bank,
-                     visible_cards_in=visible_cards, turn=state.turn,
+                     visible_cards=state.visible_cards, turn=state.turn,
                      last_action=self)
 
   def _check(self, player: PlayerState, state: GameState, config: GameConfig) -> bool:
@@ -218,7 +217,7 @@ class Take3Action(Action):
     # distinct gems (permissive fallback matching previous logic).
     bank = {g: amt for g, amt in state.bank}
     available = [g for g, amt in bank.items() if amt > 0 and g != Gem.GOLD]
-    total = sum(n for _, n in player.gems)
+    total = player.gems.count()
     actions: list[Take3Action] = []
     if len(available) == 0:
       return actions  # no gems available to take
@@ -290,7 +289,6 @@ class Take2Action(Action):
     # Mutable working copies: convert GemList/tuples into mutable dicts/lists
     bank = dict(state.bank)
     player_gems = dict(player.gems)
-    visible_cards = list(state.visible_cards)
 
     gem = getattr(self, 'gem')
     count = getattr(self, 'count', 2)
@@ -314,7 +312,7 @@ class Take2Action(Action):
     players = _replace_tuple(state.players, player.seat_id, new_player)
 
     return GameState(config=state.config, players=players, bank_in=bank,
-                     visible_cards_in=visible_cards, turn=state.turn,
+                     visible_cards=state.visible_cards, turn=state.turn,
                      last_action=self)
 
   def _check(self, player: PlayerState, state: GameState, config: GameConfig) -> bool:
@@ -330,7 +328,7 @@ class Take2Action(Action):
         if player_gems.get(g, 0) < amt:
           return False
 
-    total_after = sum(player_gems.values()) + self.count - (sum(n for _, n in self.ret) if self.ret else 0)
+    total_after = sum(player_gems.values()) + self.count - (self.ret.count() if self.ret else 0)
     if total_after > config.coin_max_count_per_player:
       return False
     return True
@@ -340,7 +338,7 @@ class Take2Action(Action):
     # Any non-gold gem with >= COIN_MIN_COUNT_TAKE2_IN_DECK (typically 4) is legal to take 2 of.
     actions: list[Take2Action] = []
     bank = {g: amt for g, amt in state.bank}
-    total = sum(n for _, n in player.gems)
+    total = player.gems.count()
     for g, amt in bank.items():
       if g == Gem.GOLD:
         continue
@@ -478,7 +476,7 @@ class BuyCardAction(Action):
     if self.idx is None:
       return False
     if self.idx.visible_idx is not None:
-      vi = int(self.idx.visible_idx)
+      vi = self.idx.visible_idx
       try:
         c = state.visible_cards[vi]
       except Exception:
@@ -608,8 +606,6 @@ class ReserveCardAction(Action):
       player_gems[self.ret] = player_gems.get(self.ret, 0) - 1
     # create new player with reserved card added
     new_reserved = tuple(player.reserved_cards) + (found,)
-    if len(new_reserved) > 3:
-      raise ValueError("Cannot reserve more than 3 cards")
     new_player = PlayerState(seat_id=player.seat_id, name=player.name,
                              gems_in=player_gems, score=player.score,
                              reserved_cards_in=new_reserved,
@@ -647,7 +643,7 @@ class ReserveCardAction(Action):
       if player.gems.get(self.ret) <= 0:
         return False
 
-      total = sum(n for _, n in player.gems)
+      total = player.gems.count()
       if total != config.coin_max_count_per_player:
         return False
 
@@ -660,7 +656,7 @@ class ReserveCardAction(Action):
       return actions
     gold_in_bank = state.bank.get(Gem.GOLD)
     take_gold = gold_in_bank > 0
-    total = sum(n for _, n in player.gems)
+    total = player.gems.count()
     for i, card in enumerate(state.visible_cards):
       # Card must be visible to reserve; include gold token if available
       if take_gold and total + 1 > config.coin_max_count_per_player:

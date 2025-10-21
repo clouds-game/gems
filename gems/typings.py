@@ -84,6 +84,10 @@ class GemList:
     """Return the total count of all gems in this GemList."""
     return sum(self._pairs.values())
 
+  def count_distinct(self) -> int:
+    """Return the count of distinct gem types in this GemList."""
+    return len(set(g for g, n in self._pairs.items() if n > 0))
+
   def get(self, gem: Gem) -> int:
     return self._pairs.get(gem, 0)
 

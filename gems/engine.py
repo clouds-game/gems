@@ -274,8 +274,18 @@ class Engine:
     for p in self._state.players:
       print(f"  seat={p.seat_id} name={p.name!r} score={p.score} gems={p.gems.normalized()} discounts={p.discounts.normalized()} cards={len(p.purchased_cards)} reserved={len(p.reserved_cards)}")
     print(f"Bank: {self._state.bank.normalized()}")
-    cards_table = ["%3d" % len(self.decks_by_level.get(lvl, ())) + "\t".join(["  {:25}".format(str(c)) for c in self._state.visible_cards.get_level(lvl)]) for lvl in self.config.card_levels]
-    print(f"Visible cards:\n{'\n'.join([line for line in cards_table if line.strip() != '0'])}")
+    # Build a simple table: deck-count followed by visible card titles for each level
+    cards_table: list[str] = []
+    for lvl in self.config.card_levels:
+      deck_count = len(self.decks_by_level.get(lvl, ()))
+      visible = [str(c) for c in self._state.visible_cards.get_level(lvl)]
+      if visible:
+        line = f"{deck_count:3d}\t" + "\t".join([f"{s:25}" for s in visible])
+      else:
+        line = f"{deck_count:3d}\t"
+      cards_table.append(line)
+
+    print("Visible cards:\n" + "\n".join([line for line in cards_table if line.strip() and not line.strip().startswith('0')]))
 
   def load_and_shuffle_assets(self, path: str | None = None) -> None:
     """Load assets from disk and shuffle them into decks on this Engine.
