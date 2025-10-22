@@ -1,4 +1,5 @@
 # %%
+from argparse import Action
 from collections.abc import Callable
 from dataclasses import dataclass
 from tqdm.notebook import tqdm
@@ -32,20 +33,37 @@ class RunConfig:
 
 
 @dataclass(frozen=True)
-class DisplayConfig:
+class ScoreConfig:
   filenames: list[str]
   extractor: str
   labels: list[str] | None
 
 
+@dataclass(frozen=True)
+class WinrateConfig:
+  filename: str
+
+
+@dataclass(frozen=True)
+class ActionConfig:
+  filename: str
+  line: int = 0
+  seat_id: int = 0
+
+
 @dataclass()
 class SimulationConfig:
   run_config: RunConfig
-  display_config: DisplayConfig
+  score_config: ScoreConfig
+  winrate_config: WinrateConfig
+  action_config: ActionConfig
 
   def __init__(self, config_data: dict):
     self.run_config = RunConfig(**config_data["run"])
-    self.display_config = DisplayConfig(**config_data["display"])
+    config_data["score"]["labels"] = config_data["score"].get("labels", None)
+    self.score_config = ScoreConfig(**config_data["score"])
+    self.winrate_config = WinrateConfig(**config_data["winrate"])
+    self.action_config = ActionConfig(**config_data["action"])
 
 
 def get_simulation_config() -> SimulationConfig:
@@ -98,10 +116,17 @@ def save_engines(engines: list[Engine], output_file: Path, mode="a"):
       f.write("\n")
 
 
-def load_engines(input_file: Path) -> list[Engine]:
+def load_engines(input_file: Path, start: int | None = None, end: int | None = None) -> list[Engine]:
   with open(input_file, "r", encoding="utf-8") as f:
     engines_data = [json.loads(line) for line in f]
-  return [Engine.deserialize(data) for data in engines_data]
+  if end is not None:
+    engines_data = engines_data[:end]
+  if start is not None:
+    engines_data = engines_data[start:]
+  res = []
+  for data in tqdm(engines_data, desc="Loading engines"):
+    res.append(Engine.deserialize(data))
+  return res
 
 # %%
 
@@ -116,13 +141,13 @@ def play_and_save(run_config: RunConfig) -> None:
   save_engines(engines, output_file, mode=run_config.mode)
 
 
-def load_and_replay(path: Path) -> list[list[GameState]]:
+def load_and_replay(path: Path) -> tuple[list[list[GameState]], list[Engine]]:
   engines = load_engines(path)
   states_list: list[list[GameState]] = []
   for engine in tqdm(engines, desc="replay game"):
     states = engine.replay()
     states_list.append(states)
-  return states_list
+  return states_list, engines
 
 
 # %%
@@ -160,7 +185,7 @@ def _average_scores(scores_list: list[list[int]]) -> list[float]:
   averages: list[float] = []
   for turn in range(max_len):
     # gather scores for this turn from games that lasted at least this long
-    vals: list[int] = [scores[turn] if len(scores) > turn else scores[-1] for scores in scores_list]
+    vals: list[int] = [scores[turn] for scores in scores_list if len(scores) > turn]
     averages.append(sum(vals) / len(vals))
   return averages
 

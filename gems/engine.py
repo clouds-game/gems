@@ -184,8 +184,7 @@ class Engine:
     Behavior:
       - The first element of the returned list is the current state *before*
         any actions are applied.
-      - Each subsequent element is the new immutable `GameState` after that
-        action has been applied.
+      - Each subsequent element is the new immutable `GameState` after actions in one round has been applied.
       - Successfully applied actions are appended to `_action_history`.
       - When replaying (actions is None) the `_actions_to_replay` buffer is
         cleared after successful application.
@@ -202,16 +201,21 @@ class Engine:
       to_apply = list(self._actions_to_replay)
     else:
       to_apply = list(actions)
-    state_list: list[GameState] = [self._state]
-    for action in to_apply:
-      self._state = action.apply(self._state)
-      self.advance_turn()
-      self._action_history.append(action)
-      state_list.append(self._state)
+
+    assert len(to_apply) % self._num_players == 0
+
+    states: list[GameState] = [self._state]
+
+    for actions_one_round in [to_apply[i:i + self._num_players] for i in range(0, len(to_apply), self._num_players)]:
+      for action in actions_one_round:
+        self._state = action.apply(self._state)
+        self.advance_turn()
+        self._action_history.append(action)
+      states.append(self._state)
     if actions is None:
       # clear replay buffer only when we consumed it implicitly
       self._actions_to_replay = []
-    return state_list
+    return states
 
   @staticmethod
   def create_game(num_players: int = 4, names: list[str] | None = None, config: GameConfig | None = None) -> GameState:
@@ -268,12 +272,13 @@ class Engine:
     This is a convenience for development and quick debugging; callers should
     avoid parsing the printed output in tests.
     """
-    print("--" * 20)
-    print(f"Round: {self._state.round} Turn: {self._state.turn}")
-    print("Players:")
-    for p in self._state.players:
-      print(f"  seat={p.seat_id} name={p.name!r} score={p.score} gems={p.gems.normalized()} discounts={p.discounts.normalized()} cards={len(p.purchased_cards)} reserved={len(p.reserved_cards)}")
-    print(f"Bank: {self._state.bank.normalized()}")
+    # print("--" * 20)
+    # print(f"Round: {self._state.round} Turn: {self._state.turn}")
+    # print("Players:")
+    # for p in self._state.players:
+    #   print(f"  seat={p.seat_id} name={p.name!r} score={p.score} gems={p.gems.normalized()} discounts={p.discounts.normalized()} cards={len(p.purchased_cards)} reserved={len(p.reserved_cards)}")
+    # print(f"Bank: {self._state.bank.normalized()}")
+    self._state.print_summary(show_visible_cards=False)
     # Build a simple table: deck-count followed by visible card titles for each level
     cards_table: list[str] = []
     for lvl in self.config.card_levels:

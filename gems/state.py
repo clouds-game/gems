@@ -212,3 +212,16 @@ class GameState:
     return GameState(config=self.config, players=self.players, bank=self.bank,
                      visible_cards_in=visible, turn=self.turn + 1,
                      last_action=self.last_action)
+
+  def print_summary(self, show_visible_cards: bool = True) -> None:
+    print("--" * 20)
+    print(f"Round: {self.round} Turn: {self.turn}")
+    print("Players:")
+    for p in self.players:
+      print(f"  seat={p.seat_id} name={p.name!r} score={p.score} gems={p.gems.normalized()} discounts={p.discounts.normalized()} cards={len(p.purchased_cards)} reserved={len(p.reserved_cards)}")
+    print(f"Bank: {self.bank.normalized()}")
+
+    if show_visible_cards:
+      cards_table = ["\t".join(["  {:25}".format(
+          str(c)) for c in self.visible_cards.get_level(lvl)]) for lvl in self.config.card_levels]
+      print(f"Visible cards:\n{'\n'.join([line for line in cards_table if line.strip() != '0'])}")
