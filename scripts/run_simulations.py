@@ -20,20 +20,20 @@ RandomAgentFile = Simulation_Dir / "RandomAgent.jsonl"
 GreedyAgentFile = Simulation_Dir / "GreedyAgent.jsonl"
 
 
-def run_simulations(n: int, config: GameConfig, agent_cls: type[BaseAgent]) -> list[Engine]:
+def run_simulations(n: int, config: GameConfig, agents: list[BaseAgent], debug: bool = False) -> list[Engine]:
   """Run `n` independent games using `agents` for each seat.
   - n: number of full rounds to play (each run starts a fresh Engine)
   - agents: list of agents, one per player seat.
   """
 
   num_players = config.num_players
-  agents = [agent_cls(seat_id=i) for i in range(num_players)]
+  assert len(agents) == num_players
   engines = []
   for i in tqdm(range(n), desc="Running simulations"):
     seed = 1234 + i
     engine: Engine = Engine.new(num_players=num_players, seed=seed, config=config)
     while not engine.game_end():
-      engine.play_one_round(agents=agents, debug=False)
+      engine.play_one_round(agents=agents, debug=debug)
     engines.append(engine)
   return engines
 
@@ -54,27 +54,25 @@ def load_engines(input_file: Path) -> list[Engine]:
 # %%
 
 
-def _get_save_file(agent_cls: type[BaseAgent], num_players: int) -> Path:
-  """Get the save file path for a specific agent class and number of players."""
-  match agent_cls:
-    case _ if issubclass(agent_cls, RandomAgent):
-      return Simulation_Dir / f"random_agent_{num_players}_players.jsonl"
-    case _ if issubclass(agent_cls, GreedyAgent):
-      return Simulation_Dir / f"greedy_agent_{num_players}_players.jsonl"
-    case _:
-      raise ValueError(f"Unsupported agent class: {agent_cls}")
+# def _get_save_file(agent_cls: type[BaseAgent], num_players: int) -> Path:
+#   """Get the save file path for a specific agent class and number of players."""
+#   match agent_cls:
+#     case _ if issubclass(agent_cls, RandomAgent):
+#       return Simulation_Dir / f"random_agent_{num_players}_players.jsonl"
+#     case _ if issubclass(agent_cls, GreedyAgent):
+#       return Simulation_Dir / f"greedy_agent_{num_players}_players.jsonl"
+#     case _:
+#       raise ValueError(f"Unsupported agent class: {agent_cls}")
 
 
-def play_and_save(n_games: int, agent_cls: type[BaseAgent], num_players: int) -> None:
+def play_and_save(n_games: int, num_players: int, agents: list[BaseAgent], path: Path) -> None:
   config = GameConfig(num_players=num_players)
-  engines = run_simulations(n_games, config, agent_cls)
-  save_file = _get_save_file(agent_cls, num_players)
-  save_engines(engines, save_file)
+  engines = run_simulations(n_games, config, agents)
+  save_engines(engines, path)
 
 
-def load_and_replay(agent_cls: type[BaseAgent], num_players: int) -> list[list[GameState]]:
-  save_file = _get_save_file(agent_cls, num_players)
-  engines = load_engines(save_file)
+def load_and_replay(path: Path) -> list[list[GameState]]:
+  engines = load_engines(path)
   states_list: list[list[GameState]] = []
   for engine in tqdm(engines, desc="replay game"):
     states = engine.replay()
@@ -171,8 +169,8 @@ def plot_scores(score_lists: list[list[int]] | list[list[float]], labels: list[s
 
 
 # %%
-greedy_states_list = load_and_replay(GreedyAgent, num_players=1)
-random_states_list = load_and_replay(RandomAgent, num_players=1)
+greedy_states_list = load_and_replay(Simulation_Dir / "greedy_agent_1_players.jsonl")
+random_states_list = load_and_replay(Simulation_Dir / "random_agent_1_players.jsonl")
 plot_scores(single_player_extract_scores(greedy_states_list))
 plot_scores(single_player_extract_scores(random_states_list))
 plot_scores([
@@ -181,6 +179,6 @@ plot_scores([
 ], labels=["Greedy", "Random"])
 
 # %%
-plot_scores(multiplayer_extract_average_scores(load_and_replay(
-    GreedyAgent, num_players=3)), labels=["Player 1", "Player 2", "Player 3"])
+plot_scores(multiplayer_extract_average_scores(load_and_replay(Simulation_Dir /
+            "greedy_agent_3_players.jsonl")), labels=["Player 1", "Player 2", "Player 3"])
 # %%
