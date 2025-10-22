@@ -31,6 +31,7 @@ def quick_score(state: GameState, seat_id: int, action: Action) -> float:
     return (get_num - drop_num) * 10
   elif isinstance(action, BuyCardAction):
     card = action.card
+    assert card is not None
     score = (card.points + 1) * 50 + (5 if card.bonus is not None else 0)
     payment_cost = action.payment.get(Gem.GOLD) * 2 + \
         sum(action.payment.get(g) for g in Gem if g != Gem.GOLD)
@@ -51,13 +52,15 @@ class GreedyAgent(Agent):
   def act(self, state: GameState, legal_actions: Sequence[Action], *, timeout: float | None = None) -> Action:
     if not legal_actions:
       raise ValueError("No legal actions available")
-    best = None
-    best_score = float('-inf')
-    for a in legal_actions:
-      s = quick_score(state, self.seat_id, a)
-      if s > best_score:
-        best_score = s
-        best = a
+
+    action_score = [
+        (a, quick_score(state, self.seat_id, a)) for a in legal_actions
+    ]
+    best_score = max(score for _, score in action_score)
+    best_actions = [a for a, score in action_score if score == best_score]
+
+    best = self.rng.choice(best_actions)
+
     # At this point `best` is guaranteed to be set because `legal_actions`
     # is non-empty, but help the type-checker by asserting not None.
     assert best is not None
