@@ -9,8 +9,11 @@ def test_gem_list_init():
   gl2 = GemList([(Gem.GREEN, 1), (Gem.WHITE, 4)])
   assert dict(gl2) == {Gem.GREEN: 1, Gem.WHITE: 4}
 
-  gl3 = GemList()
+  gl3 = GemList(())
   assert dict(gl3) == {}
+
+  gl4 = GemList()
+  assert dict(gl4) == {}
 
 
 def test_card_init():
@@ -81,3 +84,34 @@ def test_card_idx():
 
   with pytest.raises(ValueError):
     CardIdx(visible_idx=1, reserve_idx=2)
+
+def test_pydantic():
+  from pydantic import Field
+  from pydantic.dataclasses import dataclass as pydantic_dataclass
+  from dataclasses import InitVar
+  from pydantic import field_validator
+
+  @pydantic_dataclass(frozen=True)
+  class MyList:
+    input: InitVar[dict[str, int] | list[tuple[str, int]]] = Field(alias='value')
+    value: dict[str, int] = Field(init=False)
+
+    @field_validator('input', mode='before')
+    @classmethod
+    def validate_value(cls, v: dict[str, int] | list[tuple[str, int]]):
+      print(f"Validating input: {v}")
+      if isinstance(v, dict):
+        return v
+      elif isinstance(v, list):
+        return dict(v)
+      else:
+        raise ValueError("Invalid input type for MyList")
+
+    def __post_init__(self, input):
+      object.__setattr__(self, 'value', input)
+
+
+  MyList(value={'a': 1, 'b': 2}) # static typing works
+  a = MyList([('a', 1), ('b', 2)]) # static typing failed
+
+  assert a.value == {'a': 1, 'b': 2}

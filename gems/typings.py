@@ -1,7 +1,7 @@
 from dataclasses import MISSING, dataclass, field, InitVar
 from enum import Enum
 from typing import Any
-from pydantic import model_validator
+from pydantic import BaseModel, field_validator, model_validator, Field
 from pydantic.dataclasses import dataclass as pydantic_dataclass
 from collections.abc import Iterable, Mapping, Iterator
 
@@ -47,7 +47,7 @@ class Gem(Enum):
     return "⭕"  # fallback to HEAVY LARGE CIRCLE
 
 
-@dataclass(frozen=True)
+@pydantic_dataclass(frozen=True)
 class GemList:
   """Immutable list-like wrapper for a sequence of (Gem, int) pairs.
 
@@ -57,15 +57,22 @@ class GemList:
   Provides lightweight helpers to convert to/from dict and to iterate.
   """
   COLOR_ORDER = (Gem.BLUE, Gem.WHITE, Gem.BLACK, Gem.RED, Gem.GREEN, Gem.GOLD)
-  _pairs: Mapping[Gem, int] = field(default_factory=dict)
+  _pairs_in: InitVar[tuple[tuple['Gem', int], ...] | list[tuple['Gem', int]] | Mapping['Gem', int]] = Field(default_factory=dict, alias='_pairs')
+  _pairs: dict[Gem, int] = field(init=False, default_factory=dict)
 
-  def __init__(self, vals: tuple[tuple['Gem', int], ...] | list[tuple['Gem', int]] | Mapping['Gem', int] = ()):  # pragma: no cover - simple wrapper
+  @field_validator('_pairs_in', mode='before')
+  @classmethod
+  def validate_pairs(cls, vals):
     # normalize via the existing helper
     if isinstance(vals, GemList):
       pairs = vals._pairs
     else:
       pairs = dict(vals)
-    object.__setattr__(self, '_pairs', pairs)
+    return pairs
+
+  def __post_init__(self, _pairs_in):
+    assert isinstance(_pairs_in, dict)
+    object.__setattr__(self, '_pairs', _pairs_in)
 
   def __iter__(self) -> Iterator[tuple['Gem', int]]:
     return iter(self._pairs.items())
