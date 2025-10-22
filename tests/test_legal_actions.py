@@ -20,7 +20,7 @@ def test_get_legal_actions_basic():
 def test_buy_card_included_when_affordable():
   # create engine and replace state with a known affordable visible card
   e = Engine.new(2)
-  card = Card(id='buy-1', cost_in=[(Gem.BLACK, 2)])
+  card = Card(id='buy-1', cost=[(Gem.BLACK, 2)])
   p0 = PlayerState(seat_id=0, gems=GemList(((Gem.BLACK, 2),)))
   p1 = PlayerState(seat_id=1, gems=GemList(()))
   # reuse the bank from the current engine state
@@ -34,7 +34,7 @@ def test_buy_card_included_when_affordable():
 def test_buy_card_not_included_when_unaffordable_but_included_with_gold():
   # unaffordable without gold
   e = Engine.new(2)
-  card = Card(id='buy-2', cost_in=[(Gem.BLACK, 3)])
+  card = Card(id='buy-2', cost=[(Gem.BLACK, 3)])
   p0 = PlayerState(seat_id=0, gems=GemList(((Gem.BLACK, 2),)))
   p1 = PlayerState(seat_id=1, gems=GemList(()))
   state = GameState(config=e.config, players=(p0, p1), bank=e.get_state().bank, visible_cards_in=(card,), turn=0)
@@ -54,7 +54,7 @@ def test_buy_card_not_included_when_unaffordable_but_included_with_gold():
 def test_gold_allows_multiple_payment_combinations():
   e = Engine.new(2)
   # card requires 2 red and 2 blue
-  card = Card(id='multi-1', cost_in=[(Gem.RED, 2), (Gem.BLUE, 2)])
+  card = Card(id='multi-1', cost=[(Gem.RED, 2), (Gem.BLUE, 2)])
   # player has 2 red, 2 blue and 1 gold -> multiple ways to pay (use gold for either color or not at all)
   p0 = PlayerState(seat_id=0, gems=GemList(((Gem.RED, 2), (Gem.BLUE, 2), (Gem.GOLD, 1))))
   p1 = PlayerState(seat_id=1, gems=GemList(()))
@@ -125,7 +125,7 @@ def test_buy_card_legal_if_affordable_by_exact_payment():
   # sanity check: buying a visible affordable card should appear in legal actions
 
   e = Engine.new(2)
-  card = Card(id='aff-1', cost_in=[(Gem.BLACK, 1)])
+  card = Card(id='aff-1', cost=[(Gem.BLACK, 1)])
   p0 = PlayerState(seat_id=0, gems=GemList(((Gem.BLACK, 1),)))
   p1 = PlayerState(seat_id=1, gems=GemList(()))
   state = GameState(config=e.config, players=(p0, p1), bank=e.get_state().bank, visible_cards_in=(card,), turn=0)
@@ -138,7 +138,7 @@ def test_buy_card_legal_if_affordable_by_exact_payment():
 def test_player_can_buy_own_reserved_card():
   # Player reserves a card and then should be able to buy it if they can afford it
   e = Engine.new(2)
-  card = Card(id='res-1', cost_in=[(Gem.BLACK, 1)])
+  card = Card(id='res-1', cost=[(Gem.BLACK, 1)])
   # player 0 has the exact gem to buy the reserved card
   p0 = PlayerState(seat_id=0, gems=GemList(((Gem.BLACK, 1),)), reserved_cards_in=(card,))
   p1 = PlayerState(seat_id=1, gems=GemList(()))
@@ -347,7 +347,7 @@ def test_reserve_with_return_enumerated_and_apply():
   from gems.actions import ReserveCardAction
 
   e = Engine.new(2)
-  card = Card(id='res-ret', cost_in=[])
+  card = Card(id='res-ret', cost=[])
   # player has 10 gems: 5 red, 5 blue
   p0 = PlayerState(seat_id=0, gems=GemList(((Gem.RED, 5), (Gem.BLUE, 5))))
   p1 = PlayerState(seat_id=1, gems=GemList(()))

@@ -121,8 +121,8 @@ def test_state_space_obs():
   engine = Engine.new(num_players=2, seed=123)
   # construct a visible card with a bonus and costs
   cards = [
-    Card(id='c1', level=1, points=2, bonus=Gem.BLACK, cost_in=[(Gem.RED, 1), (Gem.BLUE, 2)]),
-    Card(id='c2', level=2, points=3, bonus=None, cost_in=[(Gem.WHITE, 1)]),
+    Card(id='c1', level=1, points=2, bonus=Gem.BLACK, cost=[(Gem.RED, 1), (Gem.BLUE, 2)]),
+    Card(id='c2', level=2, points=3, bonus=None, cost=[(Gem.WHITE, 1)]),
   ]
 
   # bank and player gems mapping

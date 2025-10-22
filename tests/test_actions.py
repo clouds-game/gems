@@ -36,7 +36,7 @@ def test_action_constructors_basic():
   assert a2.count == 2
   assert str(a2) == "Action.Take2(2⚪)"
 
-  card1 = Card(id='card-1', level=1, cost_in={Gem.BLACK: 1})
+  card1 = Card(id='card-1', level=1, cost={Gem.BLACK: 1})
   a3 = Action.buy(card1, payment={Gem.BLACK: 1, Gem.GREEN: 1}, visible_idx=0)
   assert isinstance(a3, Action)
   assert isinstance(a3, BuyCardAction)
@@ -78,7 +78,7 @@ def test_action_constructors_basic():
 
 def test_action_serialize_roundtrip():
   # create a variety of actions and ensure serialize->deserialize roundtrips
-  card1 = Card(id='card-serialize-1', level=2, cost_in={Gem.BLACK: 1, Gem.GREEN: 2}, points=1, bonus=Gem.BLUE)
+  card1 = Card(id='card-serialize-1', level=2, cost={Gem.BLACK: 1, Gem.GREEN: 2}, points=1, bonus=Gem.BLUE)
 
   actions = [
     Action.noop(),

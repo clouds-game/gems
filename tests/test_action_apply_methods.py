@@ -18,7 +18,7 @@ def make_basic_state():
     PlayerState(seat_id=1, name='P1', gems_in=((Gem.RED, 0), (Gem.BLUE, 0))),
   )
   bank = {Gem.RED: 4, Gem.BLUE: 4, Gem.GOLD: 1, Gem.WHITE: 4, Gem.BLACK: 4, Gem.GREEN: 4}
-  card = Card(id='c1', level=1, points=1, bonus=Gem.RED, cost_in={Gem.RED: 1})
+  card = Card(id='c1', level=1, points=1, bonus=Gem.RED, cost={Gem.RED: 1})
   state = GameState(config=config, players=players, bank_in=bank.items(), visible_cards_in=(card,), turn=0)
   return state
 

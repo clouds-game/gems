@@ -1,7 +1,7 @@
-from dataclasses import MISSING, dataclass, field, InitVar
+from dataclasses import InitVar
 from enum import Enum
-from typing import Any
-from pydantic import BaseModel, field_validator, model_validator, Field
+from typing import Any, TypeAlias
+from pydantic import field_validator, model_validator, Field
 from pydantic.dataclasses import dataclass as pydantic_dataclass
 from collections.abc import Iterable, Mapping, Iterator
 
@@ -46,7 +46,6 @@ class Gem(Enum):
       return "🟡"
     return "⭕"  # fallback to HEAVY LARGE CIRCLE
 
-
 @pydantic_dataclass(frozen=True)
 class GemList:
   """Immutable list-like wrapper for a sequence of (Gem, int) pairs.
@@ -57,8 +56,8 @@ class GemList:
   Provides lightweight helpers to convert to/from dict and to iterate.
   """
   COLOR_ORDER = (Gem.BLUE, Gem.WHITE, Gem.BLACK, Gem.RED, Gem.GREEN, Gem.GOLD)
-  _pairs_in: InitVar[tuple[tuple['Gem', int], ...] | list[tuple['Gem', int]] | Mapping['Gem', int]] = Field(default_factory=dict, alias='_pairs')
-  _pairs: dict[Gem, int] = field(init=False, default_factory=dict)
+  _pairs_in: InitVar[Mapping['Gem', int] | tuple[tuple['Gem', int], ...] | list[tuple['Gem', int]]] = Field(default_factory=dict, alias='_pairs')
+  _pairs: dict[Gem, int] = Field(init=False, default_factory=dict)
 
   @field_validator('_pairs_in', mode='before')
   @classmethod
@@ -111,6 +110,7 @@ class GemList:
 
   def __str__(self) -> str:  # pragma: no cover - convenience
     return "".join(f"{n}{g.color_circle()}" for g, n in self) or "⭕"
+GemListInput: TypeAlias = GemList | Mapping[Gem, int] | Iterable[tuple[Gem, int]]
 
 
 class ActionType(Enum):
@@ -124,7 +124,7 @@ class ActionType(Enum):
     return self.value
 
 
-@dataclass(frozen=True)
+@pydantic_dataclass(frozen=True)
 class Card:
   """Represents a purchasable card in the game.
 
@@ -140,10 +140,10 @@ class Card:
   bonus: Gem | None = None
   # Accept iterator/mapping inputs at construction time; store immutable
   # tuple-backed attributes for consumers.
-  cost_in: InitVar[Iterable[tuple[Gem, int]] | Mapping[Gem, int]] = ()
-  cost: GemList = field(init=False, default_factory=GemList)
-  metadata_in: InitVar[Iterable[tuple[str, Any]] | Mapping[str, Any]] = ()
-  metadata: tuple[tuple[str, Any], ...] = field(init=False, default_factory=tuple)
+  cost_in: InitVar[GemListInput] = Field(default_factory=GemList, alias='cost')
+  cost: GemList = Field(init=False, default_factory=GemList)
+  metadata_in: InitVar[Mapping[str, Any] | Iterable[tuple[str, Any]]] = Field(default_factory=tuple, alias='metadata')
+  metadata: tuple[tuple[str, Any], ...] = Field(init=False, default_factory=tuple)
 
   def __post_init__(self, cost_in, metadata_in):
     # normalize cost and metadata into tuples so Card is always immutable
@@ -165,15 +165,15 @@ class Card:
   @classmethod
   def from_dict(cls, d: dict) -> 'Card':
     bonus = Gem(d['bonus']) if d.get('bonus') is not None else None
-    cost = tuple((Gem(g), n) for g, n in d.get('cost', ()))
+    cost = GemList([(Gem(g), n) for g, n in d.get('cost', ())])
     metadata = tuple(d.get('metadata', ()))
     # Ensure id is always a string (use empty string as default)
     cid = d.get('id')
     if not cid:
       raise Exception("Card id is required")
     return cls(id=cid, name=d.get('name'), level=d.get('level', 1),
-               points=d.get('points', 0), bonus=bonus, cost_in=cost,
-               metadata_in=metadata)
+               points=d.get('points', 0), bonus=bonus, cost=cost,
+               metadata=metadata)
 
   def __str__(self) -> str:  # pragma: no cover - tiny convenience
     bonus = self.bonus.color_circle() if self.bonus else "⭕"
@@ -181,18 +181,18 @@ class Card:
     return f"Card{self.level}(<{self.id}>{points}{bonus}:{self.cost})"
 
 
-@dataclass(frozen=True)
+@pydantic_dataclass(frozen=True)
 class CardList:
   """Immutable list-like wrapper for a sequence of Card objects.
 
   Minimal helper used to represent visible/reserved/purchased card lists
   in the public API. Mirrors the shape of `GemList` but for `Card`.
   """
-  _items: tuple['Card', ...] = field(default_factory=tuple)
+  _items_in: InitVar[Iterable['Card']] = Field(default_factory=tuple, alias='items')
+  _items: tuple['Card', ...] = Field(init=False, default_factory=tuple)
 
-  def __init__(self, vals: Iterable['Card'] = ()):  # pragma: no cover - simple wrapper
-    items = tuple(vals)
-    object.__setattr__(self, '_items', items)
+  def __post_init__(self, _items_in: Iterable['Card'] = ()):
+    object.__setattr__(self, '_items', tuple(_items_in))
 
   def __iter__(self):
     return iter(self._items)
@@ -280,7 +280,7 @@ class CardIdx:
     return f"<[Invalid]{id_part}>"
 
 
-@dataclass(frozen=True)
+@pydantic_dataclass(frozen=True)
 class Role:
   """Represents a special role/noble with requirements and point reward.
 
@@ -292,10 +292,10 @@ class Role:
   points: int = 0
   # Accept iterator or mapping at construction time via InitVar; the
   # public attributes `requirements` and `metadata` are always tuples.
-  requirements_in: InitVar[Iterable[tuple[Gem, int]] | Mapping[Gem, int]] = ()
-  requirements: GemList = field(init=False, default_factory=GemList)
-  metadata_in: InitVar[Iterable[tuple[str, Any]] | Mapping[str, Any]] = ()
-  metadata: tuple[tuple[str, Any], ...] = field(init=False, default_factory=tuple)
+  requirements_in: InitVar[GemListInput] = Field(default_factory=GemList, alias='requirements')
+  requirements: GemList = Field(init=False, default_factory=GemList)
+  metadata_in: InitVar[Mapping[str, Any] | Iterable[tuple[str, Any]]] = Field(default_factory=tuple, alias='metadata')
+  metadata: tuple[tuple[str, Any], ...] = Field(init=False, default_factory=tuple)
 
   def __post_init__(self, requirements_in, metadata_in):
     # normalize and store the tuple-backed public attributes
@@ -313,7 +313,7 @@ class Role:
 
   @classmethod
   def from_dict(cls, d: dict) -> 'Role':
-    reqs = tuple((Gem(g), n) for g, n in d.get('requirements', ()))
+    reqs = GemList([(Gem(g), int(n)) for g, n in d.get('requirements', ())])
     metadata = tuple(d.get('metadata', ()))
     return cls(id=d.get('id'), name=d.get('name'), points=d.get('points', 0),
-               requirements_in=reqs, metadata_in=metadata)
+               requirements=reqs, metadata=metadata)

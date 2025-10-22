@@ -17,12 +17,12 @@ def test_gem_list_init():
 
 
 def test_card_init():
-  c = Card(id="c1", name="C", level=2, points=2, bonus=Gem.GREEN, cost_in=[(Gem.RED, 2)])
+  c = Card(id="c1", name="C", level=2, points=2, bonus=Gem.GREEN, cost=[(Gem.RED, 2)])
   assert isinstance(c.cost, GemList)
 
 
 def test_card_roundtrip():
-  c = Card(id='c1', name='C', level=2, points=2, bonus=Gem.GREEN, cost_in=[(Gem.RED, 2)], metadata_in=[('foo', 'bar')])
+  c = Card(id='c1', name='C', level=2, points=2, bonus=Gem.GREEN, cost=[(Gem.RED, 2)], metadata=[('foo', 'bar')])
   d = c.to_dict()
   c2 = Card.from_dict(d)
   assert c2.id == c.id
@@ -34,7 +34,7 @@ def test_card_roundtrip():
 
 
 def test_role_roundtrip():
-  r = Role(id='r1', name='R', points=3, requirements_in={Gem.BLUE:3}, metadata_in=[('k','v')])
+  r = Role(id='r1', name='R', points=3, requirements={Gem.BLUE:3}, metadata=[('k','v')])
   d = r.to_dict()
   r2 = Role.from_dict(d)
   assert r2.id == r.id
