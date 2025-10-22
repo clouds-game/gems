@@ -1,0 +1,18 @@
+[run]
+# List of agent classes to use in the simulations
+agents = ["GreedyAgent", "TargetAgent"]
+# Output filename for the engines dump
+filename = "greedy_vs_target.jsonl"
+# Number of games to simulate per configuration
+n_games = 5
+# a - append
+# w - overwrite
+mode = "w"
+
+[display]
+# Filenames for the engines dump to display
+filenames = ["greedy_vs_target.jsonl"]
+# Extractor function to use for displaying results
+extractor = "multiplayer_extract_average_scores"
+# Labels for display in plt
+labels = ["Greedy Agent", "Target Agent"]

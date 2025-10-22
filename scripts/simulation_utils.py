@@ -1,4 +1,6 @@
 # %%
+from collections.abc import Callable
+from dataclasses import dataclass
 from tqdm.notebook import tqdm
 from _common import RES_DIR
 
@@ -6,18 +8,68 @@ import json
 from pathlib import Path
 
 from gems.agents.core import Agent, BaseAgent
+from gems.agents.target import TargetAgent
 from gems.consts import GameConfig
 from gems.engine import Engine
 from gems.agents.random import RandomAgent
 from gems.agents.greedy import GreedyAgent
 import matplotlib.pyplot as plt
+import tomllib
+
 
 from gems.state import GameState
 # %%
 
 Simulation_Dir = RES_DIR / "simulations"
-RandomAgentFile = Simulation_Dir / "RandomAgent.jsonl"
-GreedyAgentFile = Simulation_Dir / "GreedyAgent.jsonl"
+
+
+@dataclass(frozen=True)
+class RunConfig:
+  agents: list[str]
+  filename: str
+  n_games: int
+  mode: str
+
+
+@dataclass(frozen=True)
+class DisplayConfig:
+  filenames: list[str]
+  extractor: str
+  labels: list[str] | None
+
+
+@dataclass()
+class SimulationConfig:
+  run_config: RunConfig
+  display_config: DisplayConfig
+
+  def __init__(self, config_data: dict):
+    self.run_config = RunConfig(**config_data["run"])
+    self.display_config = DisplayConfig(**config_data["display"])
+
+
+def get_simulation_config() -> SimulationConfig:
+  with open("simulation_config.toml", "rb") as f:
+    data = tomllib.load(f)
+  return SimulationConfig(data)
+
+
+def instantiate_agents(agent_names: list[str]) -> list[Agent]:
+  """Instantiate agents from their class names."""
+  agents: list[Agent] = []
+  for seat_id, name in enumerate(agent_names):
+    match name:
+      case "RandomAgent":
+        agents.append(RandomAgent(seat_id=seat_id))
+      case "GreedyAgent":
+        agents.append(GreedyAgent(seat_id=seat_id))
+      case "TargetAgent":
+        agents.append(TargetAgent(seat_id=seat_id))
+      case _:
+        raise ValueError(f"Unsupported agent name: {name}")
+  return agents
+
+# %%
 
 
 def run_simulations(n: int, config: GameConfig, agents: list[BaseAgent], debug: bool = False) -> list[Engine]:
@@ -38,9 +90,9 @@ def run_simulations(n: int, config: GameConfig, agents: list[BaseAgent], debug: 
   return engines
 
 
-def save_engines(engines: list[Engine], output_file: Path):
+def save_engines(engines: list[Engine], output_file: Path, mode="a"):
   output_file.parent.mkdir(parents=True, exist_ok=True)
-  with open(output_file, "a", encoding="utf-8") as f:
+  with open(output_file, mode, encoding="utf-8") as f:
     for e in engines:
       json.dump(e.serialize(), f, ensure_ascii=False)
       f.write("\n")
@@ -54,21 +106,14 @@ def load_engines(input_file: Path) -> list[Engine]:
 # %%
 
 
-# def _get_save_file(agent_cls: type[BaseAgent], num_players: int) -> Path:
-#   """Get the save file path for a specific agent class and number of players."""
-#   match agent_cls:
-#     case _ if issubclass(agent_cls, RandomAgent):
-#       return Simulation_Dir / f"random_agent_{num_players}_players.jsonl"
-#     case _ if issubclass(agent_cls, GreedyAgent):
-#       return Simulation_Dir / f"greedy_agent_{num_players}_players.jsonl"
-#     case _:
-#       raise ValueError(f"Unsupported agent class: {agent_cls}")
+def play_and_save(run_config: RunConfig) -> None:
+  num_players = len(run_config.agents)
+  game_config = GameConfig(num_players=num_players)
 
-
-def play_and_save(n_games: int, num_players: int, agents: list[BaseAgent], path: Path) -> None:
-  config = GameConfig(num_players=num_players)
-  engines = run_simulations(n_games, config, agents)
-  save_engines(engines, path)
+  agents = instantiate_agents(run_config.agents)
+  engines = run_simulations(run_config.n_games, game_config, agents)
+  output_file = Simulation_Dir / run_config.filename
+  save_engines(engines, output_file, mode=run_config.mode)
 
 
 def load_and_replay(path: Path) -> list[list[GameState]]:
@@ -81,11 +126,21 @@ def load_and_replay(path: Path) -> list[list[GameState]]:
 
 
 # %%
-# play_and_save(5, GreedyAgent, num_players=1)
-# play_and_save(5, RandomAgent, num_players=1)
 
 
 # %%
+EXTRACTORS: dict[str, tuple[Callable, bool]] = {}
+
+
+def extractor(need_group=False):
+  def decorator(func):
+    EXTRACTORS[func.__name__] = (func, need_group)
+
+    def wrapper(*args, **kwargs):
+      return func(*args, **kwargs)
+    return wrapper
+  return decorator
+
 
 def _extract_scores(states_list: list[list[GameState]], seat_id: int) -> list[list[int]]:
   scores_list: list[list[int]] = []
@@ -95,6 +150,7 @@ def _extract_scores(states_list: list[list[GameState]], seat_id: int) -> list[li
   return scores_list
 
 
+@extractor()
 def single_player_extract_scores(states_list: list[list[GameState]]) -> list[list[int]]:
   return _extract_scores(states_list, seat_id=0)
 
@@ -109,6 +165,7 @@ def _average_scores(scores_list: list[list[int]]) -> list[float]:
   return averages
 
 
+@extractor(True)
 def single_player_extract_average_scores(states_list: list[list[GameState]]) -> list[float]:
   """Compute per-turn average scores across multiple games.
   - states_list: list of game states (one per game). Games may have
@@ -122,6 +179,7 @@ def single_player_extract_average_scores(states_list: list[list[GameState]]) -> 
   return _average_scores(scores_list)
 
 
+@extractor()
 def multiplayer_extract_average_scores(states_list: list[list[GameState]]) -> list[list[float]]:
   """Compute per-turn average scores for each player across multiple games.
   - states_list: list of game states (one per game). Games may have
@@ -165,20 +223,18 @@ def plot_scores(score_lists: list[list[int]] | list[list[float]], labels: list[s
   plt.grid(True, linestyle="--", alpha=0.4)
   plt.show()
 
-# %%
-
 
 # %%
-greedy_states_list = load_and_replay(Simulation_Dir / "greedy_agent_1_players.jsonl")
-random_states_list = load_and_replay(Simulation_Dir / "random_agent_1_players.jsonl")
-plot_scores(single_player_extract_scores(greedy_states_list))
-plot_scores(single_player_extract_scores(random_states_list))
-plot_scores([
-    single_player_extract_average_scores(greedy_states_list),
-    single_player_extract_average_scores(random_states_list)
-], labels=["Greedy", "Random"])
+# greedy_states_list = load_and_replay(Simulation_Dir / "greedy_agent_1_players.jsonl")
+# random_states_list = load_and_replay(Simulation_Dir / "random_agent_1_players.jsonl")
+# plot_scores(single_player_extract_scores(greedy_states_list))
+# plot_scores(single_player_extract_scores(random_states_list))
+# plot_scores([
+#     single_player_extract_average_scores(greedy_states_list),
+#     single_player_extract_average_scores(random_states_list)
+# ], labels=["Greedy", "Random"])
 
-# %%
-plot_scores(multiplayer_extract_average_scores(load_and_replay(Simulation_Dir /
-            "greedy_agent_3_players.jsonl")), labels=["Player 1", "Player 2", "Player 3"])
+# # %%
+# plot_scores(multiplayer_extract_average_scores(load_and_replay(Simulation_Dir /
+#             "greedy_agent_3_players.jsonl")), labels=["Player 1", "Player 2", "Player 3"])
 # %%

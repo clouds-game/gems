@@ -12,3 +12,4 @@ uv.lock
 .coverage
 coverage.xml
 res/
+scripts/simulation_config.toml
