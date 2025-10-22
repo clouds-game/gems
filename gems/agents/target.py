@@ -82,7 +82,9 @@ class TargetAgent(Agent):
     use this opportunity to choose a new target card.
     """
     if self.target_card is None or self.target_card not in state.visible_cards:
-      self.target_card = self.choose_target_card(state)
+      visible_cards = list(state.visible_cards) + list(state.players[self.seat_id].reserved_cards)
+      if self.target_card not in visible_cards:
+        self.target_card = self.choose_target_card(state)
 
   def choose_target_card(self, state: GameState) -> Card | None:
     """Choose a target card from the currently visible cards.
