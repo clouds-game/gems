@@ -1,4 +1,21 @@
-from gems.typings import Card, Role, Gem
+import pytest
+from gems.typings import Card, CardIdx, GemList, Role, Gem
+
+
+def test_gem_list_init():
+  gl1 = GemList({Gem.RED: 2, Gem.BLUE: 3})
+  assert dict(gl1) == {Gem.RED: 2, Gem.BLUE: 3}
+
+  gl2 = GemList([(Gem.GREEN, 1), (Gem.WHITE, 4)])
+  assert dict(gl2) == {Gem.GREEN: 1, Gem.WHITE: 4}
+
+  gl3 = GemList()
+  assert dict(gl3) == {}
+
+
+def test_card_init():
+  c = Card(id="c1", name="C", level=2, points=2, bonus=Gem.GREEN, cost_in=[(Gem.RED, 2)])
+  assert isinstance(c.cost, GemList)
 
 
 def test_card_roundtrip():
@@ -38,3 +55,29 @@ def test_playerstate_discounts_empty_and_aggregate():
   discounts_map = dict(p1.discounts)
   assert discounts_map[Gem.GREEN] == 2
   assert discounts_map[Gem.RED] == 1
+
+
+def test_card_idx():
+  a = CardIdx(visible_idx=3)
+  assert a.visible_idx == 3
+  assert a.reserve_idx is None
+  assert a.deck_head_level is None
+  assert str(a) == "<[3]>"
+
+  ci2 = CardIdx(reserve_idx=1)
+  assert ci2.visible_idx is None
+  assert ci2.reserve_idx == 1
+  assert ci2.deck_head_level is None
+  assert str(ci2) == "<R[1]>"
+
+  ci3 = CardIdx(deck_head_level=3)
+  assert ci3.visible_idx is None
+  assert ci3.reserve_idx is None
+  assert ci3.deck_head_level == 3
+  assert str(ci3) == "<D[3]>"
+
+  with pytest.raises(ValueError):
+    CardIdx()
+
+  with pytest.raises(ValueError):
+    CardIdx(visible_idx=1, reserve_idx=2)

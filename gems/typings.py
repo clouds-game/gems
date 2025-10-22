@@ -1,6 +1,8 @@
 from dataclasses import MISSING, dataclass, field, InitVar
 from enum import Enum
 from typing import Any
+from pydantic import model_validator
+from pydantic.dataclasses import dataclass as pydantic_dataclass
 from collections.abc import Iterable, Mapping, Iterator
 
 from .utils import _to_kv_tuple
@@ -57,7 +59,7 @@ class GemList:
   COLOR_ORDER = (Gem.BLUE, Gem.WHITE, Gem.BLACK, Gem.RED, Gem.GREEN, Gem.GOLD)
   _pairs: Mapping[Gem, int] = field(default_factory=dict)
 
-  def __init__(self, vals: tuple[tuple['Gem', int], ...] | Mapping['Gem', int] = ()):  # pragma: no cover - simple wrapper
+  def __init__(self, vals: tuple[tuple['Gem', int], ...] | list[tuple['Gem', int]] | Mapping['Gem', int] = ()):  # pragma: no cover - simple wrapper
     # normalize via the existing helper
     if isinstance(vals, GemList):
       pairs = vals._pairs
@@ -233,14 +235,14 @@ class CardList:
     return self.merge(other)
 
 
-@dataclass(frozen=True)
+@pydantic_dataclass(frozen=True)
 class CardIdx:
   """Represents an index referring to a card location.
 
   Exactly one of the following should be non-None:
   - `visible_idx`: index into the public visible cards (int)
   - `reserve_idx`: index into a player's reserved cards (int)
-  - `deck_head_level`: a tuple (level:int) indicating the top card of the deck for that level
+  - `deck_head_level`: an int indicating the top card of the deck for that level
 
   The class validates on construction that exactly one of the three is provided.
   """
@@ -248,12 +250,14 @@ class CardIdx:
   reserve_idx: int | None = None
   deck_head_level: int | None = None
 
-  def __post_init__(self):
+  @model_validator(mode='after')
+  def validate(self):
     # enforce exactly one non-null field
     vals = (self.visible_idx, self.reserve_idx, self.deck_head_level)
     non_null = sum(1 for v in vals if v is not None)
     if non_null != 1:
       raise ValueError("CardIdx requires exactly one of visible_idx, reserve_idx, deck_head_level to be set")
+    return self
 
   def __str__(self) -> str:
     return self.to_str()
