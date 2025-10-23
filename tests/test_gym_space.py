@@ -84,9 +84,9 @@ def test_action_space_encode_decode_roundtrip():
     Action.take3(Gem.RED, Gem.BLUE, Gem.WHITE, ret_map={Gem.RED: 1}),
     Action.take2(Gem.WHITE),
     Action.take2(Gem.BLACK, count=2, ret_map={Gem.WHITE: 1}),
-    Action.buy(card=None, visible_idx=0, payment={Gem.BLACK: 1, Gem.GREEN: 1}),
+    Action.buy_gold(card=None, visible_idx=0, gold_payment={Gem.BLACK: 1, Gem.GREEN: 1}),
     # buy by reserve_idx
-    Action.buy(card=None, reserve_idx=0, payment={Gem.BLUE: 2}),
+    Action.buy_gold(card=None, reserve_idx=0, gold_payment={Gem.BLUE: 2}),
     Action.reserve(card=None, visible_idx=1, take_gold=True),
     Action.reserve(card=None, visible_idx=2, take_gold=False),
     Action.noop(),

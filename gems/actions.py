@@ -38,6 +38,16 @@ class Action(ABC):
     return BuyCardAction.create(idx, card, payment=payment)
 
   @classmethod
+  def buy_gold(cls, card: Card | None, gold_payment: Mapping[Gem, int] | None = None, visible_idx: int | None = None, reserve_idx: int | None = None) -> 'BuyCardActionGold':
+    # maintain friendly legacy signature: build CardIdx from provided indices
+    idx = None
+    if visible_idx is not None or reserve_idx is not None:
+      idx = CardIdx(visible_idx=visible_idx, reserve_idx=reserve_idx)
+    if idx is None:
+      raise ValueError("Must provide at least one of visible_idx or reserve_idx to identify card to buy")
+    return BuyCardActionGold.create(idx, card, payment=gold_payment)
+
+  @classmethod
   def reserve(cls, card: Card | None, take_gold: bool = True, visible_idx: int | None = None) -> 'ReserveCardAction':
     idx = CardIdx(visible_idx=visible_idx) if visible_idx is not None else None
     if idx is None:

@@ -12,7 +12,7 @@ from typing import Any, TypeAlias, TypeVar, Sequence, TypedDict, cast, Generic
 import numpy as np
 from gymnasium import spaces
 
-from ..actions import Action, BuyCardAction, ReserveCardAction, Take2Action, Take3Action
+from ..actions import Action, BuyCardAction, BuyCardActionGold, ReserveCardAction, Take2Action, Take3Action
 from ..typings import Gem, ActionType, CardIdx
 from ..consts import GameConfig
 
@@ -39,6 +39,7 @@ class Take2Dict(TypedDict, Generic[T]):
 class BuyDict(TypedDict, Generic[T, U]):
   # flattened card index (0..visible+reserved-1)
   card_idx: Scalar[U]
+  payment_count: Scalar[T]
   payment: NDArray1D[T]
 
 class ReserveDict(TypedDict, Generic[T, U]):
@@ -273,21 +274,22 @@ class BuyCardSpace(spaces.Dict):
       'payment': spaces.Box(low=0, high=255, shape=(config.gem_count,), dtype=np.int32),
     }, seed, **spaces_kwargs)
 
-  def _encode(self, data: "BuyDict", action: BuyCardAction):
+  def _encode(self, data: "BuyDict", action: BuyCardActionGold):
     buy = data
     buy['card_idx'][...] = 0
     if action.idx is not None:
       buy['card_idx'][...] = self.config.flatten_card_idx(action.idx)
+    buy['payment_count'][...] = action.gold_payment.count()
     buy['payment'][...] = 0
-    for gem, amount in action.payment or ():
+    for gem, amount in action.gold_payment or ():
       buy['payment'][self.config.gem_idx[gem]] = int(amount)
 
-  def _decode(self, data: "BuyDict") -> BuyCardAction:
+  def _decode(self, data: "BuyDict") -> BuyCardActionGold:
     flat = int(data['card_idx'])
     idx = self.config.unflatten_card_idx(flat)
     pay_vec = data['payment']
     payment = self.config.decode_gems_list(pay_vec)
-    return BuyCardAction.create(idx, None, payment=payment)
+    return BuyCardActionGold.create(idx, None, payment=payment)
 
 class ReserveCardSpace(spaces.Dict):
   def __init__(self, config: ActionSpaceConfig | GameConfig, *, seed = None, **spaces_kwargs):
@@ -413,6 +415,7 @@ class ActionSpace(spaces.Dict):
       },
       'buy': {
         'card_idx': np.array(0, dtype=np.uint16),
+        'payment_count': np.array(0, dtype=np.int8),
         'payment': np.zeros(self._gem_count, dtype=np.int8),
       },
       'reserve': {
@@ -432,7 +435,7 @@ class ActionSpace(spaces.Dict):
     if isinstance(action, Take2Action):
       self._take2_space._encode(data['take2'], action)
       return data
-    if isinstance(action, BuyCardAction):
+    if isinstance(action, BuyCardActionGold):
       self._buy_space._encode(data['buy'], action)
       return data
     if isinstance(action, ReserveCardAction):
