@@ -326,7 +326,7 @@ class Role:
                requirements=reqs, metadata=metadata)
 
 
-@dataclass
+@pydantic_dataclass
 class EngineMetadata:
   """Metadata about the engine state for analysis and debugging.
 
@@ -334,7 +334,7 @@ class EngineMetadata:
   such as per-agent metadata collected each turn.
   """
 
-  agent_metadata: list[dict[str, str]] = field(default_factory=list)
+  agent_metadata: list[dict[str, str]] = Field(default_factory=list)
 
   def serialize(self) -> dict:
     return {
