@@ -105,6 +105,13 @@ class GemList:
   def as_tuple(self) -> tuple[tuple[Gem, int], ...]:
     return tuple(self._pairs.items())
 
+  def flatten(self) -> list[Gem]:
+    """Return a flat list of Gem, repeating each gem according to its count."""
+    result = []
+    for g, n in self._pairs.items():
+      result.extend([g] * n)
+    return result
+
   def __repr__(self) -> str:  # pragma: no cover - convenience
     return f"GemList({self._pairs!r})"
 

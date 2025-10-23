@@ -7,13 +7,13 @@ from ..actions import Action, NoopAction, Take3Action, Take2Action, BuyCardActio
 from ..state import GameState
 
 
-def gem_extra_score(player_gems: GemList, cost: GemList, taken_gems: Sequence[Gem]) -> float:
+def gem_extra_score(player_gems: GemList, cost: GemList, gems: Sequence[Gem]) -> float:
   score = 0.0
   total_cost_num = cost.count()
   # 如果目标卡牌需求的宝石，玩家当前不满足，则提高分数
   # 缺的越多分数越高 （因为更需要这些宝石）
   # 缺的宝石总需求量越高分数越高
-  for g in taken_gems:
+  for g in gems:
     if (g_cost := cost.get(g)) > 0 and (g_have := player_gems.get(g)) < g_cost:
       score += (g_cost - g_have) * g_cost / total_cost_num * 5
   return score
@@ -29,12 +29,16 @@ def quick_score(state: GameState, seat_id: int, target_card: Card | None, action
     drop_num = action.ret.count() if action.ret else 0
     score = (get_num - drop_num) * 10
     score += gem_extra_score(player.gems, cost, action.gems)
+    if action.ret:
+      score -= gem_extra_score(player.gems, cost, action.ret.flatten())
     return score
   elif isinstance(action, Take2Action):
     get_num = action.count
     drop_num = action.ret.count() if action.ret else 0
     score = (get_num - drop_num) * 10
     score += gem_extra_score(player.gems, cost, [action.gem] * get_num)
+    if action.ret:
+      score -= gem_extra_score(player.gems, cost, action.ret.flatten())
     return score
   elif isinstance(action, BuyCardAction):
     card = action.card
@@ -49,6 +53,7 @@ def quick_score(state: GameState, seat_id: int, target_card: Card | None, action
       score += 15
     if action.ret:
       score -= 10
+      score -= gem_extra_score(player.gems, cost, [action.ret])
     return score
   elif isinstance(action, NoopAction):
     return -100.0
@@ -68,8 +73,6 @@ class TargetAgent(Agent):
     if not legal_actions:
       raise ValueError("No legal actions available")
     self.update(state)
-    if self.debug:
-      print(f"[TargetAgent] seat_id={self.seat_id} target_card={self.target_card}")
 
     action_score = [
         (a, quick_score(state, self.seat_id, self.target_card, a)) for a in legal_actions
@@ -81,6 +84,13 @@ class TargetAgent(Agent):
     # At this point `best` is guaranteed to be set because `legal_actions`
     # is non-empty, but help the type-checker by asserting not None.
     assert best is not None
+
+    if self.debug:
+      print(f"[TargetAgent] seat_id={self.seat_id} target_card={self.target_card}")
+      print("  Legal actions and scores:")
+      action_score.sort(key=lambda x: x[1], reverse=True)
+      for a, score in action_score:
+        print(f"    Action: {a}, Score: {score}")
     return best
 
   def update(self, state: GameState) -> None:

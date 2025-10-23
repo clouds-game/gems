@@ -39,6 +39,11 @@ class ScoreConfig:
 
 
 @dataclass(frozen=True)
+class FinishRoundConfig:
+  filenames: list[str]
+
+
+@dataclass(frozen=True)
 class WinrateConfig:
   filename: str
 
@@ -54,6 +59,7 @@ class ActionConfig:
 class SimulationConfig:
   run_config: RunConfig
   score_config: ScoreConfig
+  finish_round_config: FinishRoundConfig
   winrate_config: WinrateConfig
   action_config: ActionConfig
 
@@ -61,6 +67,7 @@ class SimulationConfig:
     self.run_config = RunConfig(**config_data["run"])
     config_data["score"]["labels"] = config_data["score"].get("labels", None)
     self.score_config = ScoreConfig(**config_data["score"])
+    self.finish_round_config = FinishRoundConfig(**config_data["finish_round"])
     self.winrate_config = WinrateConfig(**config_data["winrate"])
     self.action_config = ActionConfig(**config_data["action"])
 
@@ -247,6 +254,16 @@ def plot_scores(score_lists: list[list[int]] | list[list[float]], labels: list[s
   plt.grid(True, linestyle="--", alpha=0.4)
   plt.show()
 
+# %%
+
+
+def plot_rounds(finish_rounds: list[int], label: str | None = None) -> None:
+  plt.hist(finish_rounds, bins=range(0, max(finish_rounds) + 2, 1))
+  plt.xlabel("Number of rounds to finish")
+  plt.ylabel("Number of games")
+  label = label or "Distribution of number of rounds to finish games"
+  plt.title(label)
+  plt.show()
 
 # %%
 # greedy_states_list = load_and_replay(Simulation_Dir / "greedy_agent_1_players.jsonl")
