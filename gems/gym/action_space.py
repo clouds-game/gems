@@ -26,6 +26,7 @@ GEM_COUNT = len(GemIndex)
 
 # Generic scalar type for array elements; default to np.int8 for backward compat
 T = TypeVar('T', bound=np.generic, default=np.int8)
+U = TypeVar('U', bound=np.generic, default=np.uint16)
 
 class Take3Dict(TypedDict, Generic[T]):
   gems_count: Scalar[T]
@@ -39,22 +40,22 @@ class Take2Dict(TypedDict, Generic[T]):
   ret_count: Scalar[T]
   ret: NDArray1D[T]
 
-class BuyDict(TypedDict):
+class BuyDict(TypedDict, Generic[T, U]):
   # flattened card index (0..visible+reserved-1)
-  card_idx: Scalar[np.int32]
-  payment: NDArray1D[np.int32]
+  card_idx: Scalar[U]
+  payment: NDArray1D[T]
 
-class ReserveDict(TypedDict):
-  card_idx: Scalar[np.int32]
-  take_gold: Scalar[np.int8]
-  ret: NDArray1D[np.int8]
+class ReserveDict(TypedDict, Generic[T, U]):
+  card_idx: Scalar[U]
+  take_gold: Scalar[T]
+  ret: NDArray1D[T]
 
-class ActionDict(TypedDict):
-  type: Scalar[np.int32]
-  take3: "Take3Dict"
-  take2: "Take2Dict"
-  buy: "BuyDict"
-  reserve: "ReserveDict"
+class ActionDict(TypedDict, Generic[T, U]):
+  type: Scalar[T]
+  take3: "Take3Dict[T]"
+  take2: "Take2Dict[T]"
+  buy: "BuyDict[T, U]"
+  reserve: "ReserveDict[T, U]"
 
 
 class Take3Space(spaces.Dict):
@@ -285,7 +286,7 @@ class ActionSpace(spaces.Dict):
 
   def empty(self) -> "ActionDict":
     return {
-      'type': np.array(0, dtype=np.int32),
+      'type': np.array(0, dtype=np.int8),
       'take3': {
         'gems_count': np.array(0, dtype=np.int8),
         'ret_count': np.array(0, dtype=np.int8),
@@ -299,11 +300,11 @@ class ActionSpace(spaces.Dict):
         'ret': np.zeros(self._gem_count, dtype=np.int8),
       },
       'buy': {
-        'card_idx': np.array(0, dtype=np.int32),
-        'payment': np.zeros(self._gem_count, dtype=np.int32),
+        'card_idx': np.array(0, dtype=np.uint16),
+        'payment': np.zeros(self._gem_count, dtype=np.int8),
       },
       'reserve': {
-        'card_idx': np.array(0, dtype=np.int32),
+        'card_idx': np.array(0, dtype=np.uint16),
         'take_gold': np.array(0, dtype=np.int8),
         'ret': np.zeros(self._gem_count, dtype=np.int8),
       },
