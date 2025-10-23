@@ -166,3 +166,32 @@ def test_state_space_obs():
     for g, amt in c.cost:
       gi = gem_order.index(g)
       assert int(vc['costs'][i, gi]) == amt
+
+
+def test_sample_take3_dict():
+  from gems.gym.action_space import Take3Space
+  config = GameConfig()
+  aspace = ActionSpace(config)
+  # access the Take3 subspace
+  take3_space = cast(Take3Space, aspace.spaces['take3'])
+
+  # sample many times and validate structure decodes and passes stateless checks
+  from gems.actions import Take3Action
+  for _ in range(1000):
+    d = take3_space._sample()
+    # ensure keys exist
+    assert set(d.keys()) >= {'gems_count', 'ret_count', 'gems', 'ret'}
+    # types
+    gems_arr = np.asarray(d['gems'], dtype=np.int8)
+    ret_arr = np.asarray(d['ret'], dtype=np.int8)
+    gcount = int(d['gems_count'])
+    rcount = int(d['ret_count'])
+
+    # counts match arrays
+    assert gcount == int(gems_arr.sum())
+    assert rcount == int(ret_arr.sum())
+
+    action = take3_space._decode(d)
+    assert isinstance(action, Take3Action)
+    # must pass stateless checks
+    assert action._check_without_state(config)

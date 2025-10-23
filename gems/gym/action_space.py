@@ -90,17 +90,33 @@ class Take3Space(spaces.Dict):
     return Take3Action.create(*gems, ret_map=ret)
 
   def _sample(self, mask: Take3Dict[np.bool] | None = None, probability: Take3Dict[np.floating] | None = None) -> Take3Dict:
-    gems_mask = mask['gems'] if mask is not None else None
-    gems_p = probability['gems'] if probability is not None else None
+    # build masks/weights and ensure GOLD is never selected as part of Take3
+    gems_mask = None if mask is None else np.asarray(mask['gems'], dtype=bool).copy()
+    gems_p = None if probability is None else probability['gems']
 
-    ret_mask = mask['ret'] if mask is not None else None
-    ret_p = probability['ret'] if probability is not None else None
+    # always exclude GOLD from candidate gems
+    gold_idx = GemIndex[Gem.GOLD]
+    if gems_mask is None:
+      gems_mask = np.ones(GEM_COUNT, dtype=bool)
+    gems_mask[gold_idx] = False
 
+    ret_mask = None if mask is None else np.asarray(mask['ret'], dtype=bool).copy()
+    ret_p = None if probability is None else probability['ret']
+
+    # sample up to 3 distinct non-gold gems
     gems_sampled = sample_exact(GEM_COUNT, 3, dtype=np.int8, mask=gems_mask, p=gems_p, replacement=False, rng=self._gems._np_random)
     gems_count = int(gems_sampled.sum())
 
-    ret_count = self.np_random.integers(0, gems_count + 1)
-    ret_sampled = sample_exact(GEM_COUNT, int(ret_count), dtype=np.int8, mask=ret_mask, p=ret_p, replacement=True, rng=self._gems._np_random)
+    # ensure returned gems do not overlap with taken gems by masking them out
+    if ret_mask is None:
+      ret_mask_final = np.ones(GEM_COUNT, dtype=bool)
+    else:
+      ret_mask_final = np.asarray(ret_mask, dtype=bool).copy()
+    # zero-out indices for gems that were taken
+    ret_mask_final = ret_mask_final & (gems_sampled == 0)
+
+    ret_count = int(self.np_random.integers(0, gems_count + 1))
+    ret_sampled = sample_exact(GEM_COUNT, int(ret_count), dtype=np.int8, mask=ret_mask_final, p=ret_p, replacement=True, rng=self._gems._np_random)
 
     return {
       'gems_count': np.array(gems_count, dtype=np.int8),
