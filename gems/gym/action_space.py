@@ -20,11 +20,6 @@ from ._common import NDArray1D, Scalar
 from .sampling import sample_exact
 
 
-GemIndex = {g: i for i, g in enumerate(Gem)}  # order: enum definition order
-GemList = list(Gem)
-GEM_COUNT = len(GemIndex)
-
-
 # Generic scalar type for array elements; default to np.int8 for backward compat
 T = TypeVar('T', bound=np.generic, default=np.int8)
 U = TypeVar('U', bound=np.generic, default=np.uint16)
@@ -49,6 +44,7 @@ class BuyDict(TypedDict, Generic[T, U]):
 class ReserveDict(TypedDict, Generic[T, U]):
   card_idx: Scalar[U]
   take_gold: Scalar[T]
+  ret_count: Scalar[T]
   ret: NDArray1D[T]
 
 class ActionDict(TypedDict, Generic[T, U]):
@@ -65,6 +61,10 @@ class ActionSpaceConfig(GameConfig):
 
   def __init__(self, config: GameConfig):
     super().__init__(**asdict(config))
+
+  @property
+  def gold_idx(self) -> int:
+    return self.gem_idx[Gem.GOLD]
 
   def flatten_card_idx(self, idx: CardIdx) -> int:
     """Flatten a CardIdx into an integer index using this config.
@@ -111,7 +111,7 @@ class ActionSpaceConfig(GameConfig):
       return CardIdx(deck_head_level=level)
     return None
 
-  def decode_ret_gems(self, vec) -> dict[Gem, int] | None:
+  def decode_gems_list(self, vec) -> dict[Gem, int] | None:
     """Convert a return-vector (iterable of ints) into a Gem->int dict or None.
 
     Assumes input is valid (iterable with self._gem_count entries). Returns None
@@ -141,20 +141,20 @@ class Take3Space(spaces.Dict):
     take3 = data
     take3['gems'][...] = 0
     for gem in action.gems:
-      take3['gems'][GemIndex[gem]] = 1
+      take3['gems'][self.config.gem_idx[gem]] = 1
     take3['gems_count'][...] = len(action.gems)
     take3['ret'][...] = 0
     ret_count = 0
     for gem, amount in action.ret or ():
       ret_count += amount
-      take3['ret'][GemIndex[gem]] = int(amount)
+      take3['ret'][self.config.gem_idx[gem]] = int(amount)
     take3['ret_count'][...] = ret_count
 
   def _decode(self, data: "Take3Dict") -> Take3Action:
     gems_vec = data['gems']
-    gems = tuple(gem for gem, v in zip(GemList, gems_vec) if int(v) != 0)
+    gems = tuple(gem for gem, v in zip(self.config.gem_list, gems_vec) if int(v) != 0)
     ret_vec = data['ret']
-    ret = self.config.decode_ret_gems(ret_vec)
+    ret = self.config.decode_gems_list(ret_vec)
     return Take3Action.create(*gems, ret_map=ret)
 
   def _sample(self, mask: Take3Dict[np.bool] | None = None, probability: Take3Dict[np.floating] | None = None) -> Take3Dict:
@@ -163,28 +163,28 @@ class Take3Space(spaces.Dict):
     gems_p = None if probability is None else probability['gems']
 
     # always exclude GOLD from candidate gems
-    gold_idx = GemIndex[Gem.GOLD]
+    gold_idx = self.config.gold_idx
     if gems_mask is None:
-      gems_mask = np.ones(GEM_COUNT, dtype=bool)
+      gems_mask = np.ones(self.config.gem_count, dtype=bool)
     gems_mask[gold_idx] = False
 
     ret_mask = None if mask is None else np.asarray(mask['ret'], dtype=bool).copy()
     ret_p = None if probability is None else probability['ret']
 
     # sample up to 3 distinct non-gold gems
-    gems_sampled = sample_exact(GEM_COUNT, 3, dtype=np.int8, mask=gems_mask, p=gems_p, replacement=False, rng=self._gems._np_random)
+    gems_sampled = sample_exact(self.config.gem_count, 3, dtype=np.int8, mask=gems_mask, p=gems_p, replacement=False, rng=self._gems._np_random)
     gems_count = int(gems_sampled.sum())
 
     # ensure returned gems do not overlap with taken gems by masking them out
     if ret_mask is None:
-      ret_mask_final = np.ones(GEM_COUNT, dtype=bool)
+      ret_mask_final = np.ones(self.config.gem_count, dtype=bool)
     else:
       ret_mask_final = np.asarray(ret_mask, dtype=bool).copy()
     # zero-out indices for gems that were taken
     ret_mask_final = ret_mask_final & (gems_sampled == 0)
 
     ret_count = int(self.np_random.integers(0, gems_count + 1))
-    ret_sampled = sample_exact(GEM_COUNT, int(ret_count), dtype=np.int8, mask=ret_mask_final, p=ret_p, replacement=True, rng=self._gems._np_random)
+    ret_sampled = sample_exact(self.config.gem_count, int(ret_count), dtype=np.int8, mask=ret_mask_final, p=ret_p, replacement=True, rng=self._gems._np_random)
 
     return {
       'gems_count': np.array(gems_count, dtype=np.int8),
@@ -208,18 +208,18 @@ class Take2Space(spaces.Dict):
 
   def _encode(self, data: "Take2Dict", action: Take2Action):
     take2 = data
-    take2['gem'][...] = GemIndex[action.gem]
+    take2['gem'][...] = self.config.gem_idx[action.gem]
     take2['count'][...] = int(action.count)
     take2['ret_count'][...] = action.ret.count() if action.ret is not None else 0
     take2['ret'][...] = 0
     for gem_ret, amount in action.ret or ():
-      take2['ret'][GemIndex[gem_ret]] = int(amount)
+      take2['ret'][self.config.gem_idx[gem_ret]] = int(amount)
 
   def _decode(self, data: "Take2Dict") -> Take2Action:
     gem_idx = data['gem']
-    gem = GemList[int(gem_idx)]
+    gem = self.config.gem_list[int(gem_idx)]
     count = int(data['count'])
-    ret = self.config.decode_ret_gems(data['ret'])
+    ret = self.config.decode_gems_list(data['ret'])
     return Take2Action.create(gem, count, ret_map=ret)
 
   def _sample(self, mask: Take2Dict[np.bool] | None = None, probability: Take2Dict[np.floating] | None = None) -> Take2Dict:
@@ -227,13 +227,13 @@ class Take2Space(spaces.Dict):
     gem_mask = None if mask is None else np.asarray(mask['gem'], dtype=bool).copy()
     gem_p = None if probability is None else probability['gem']
 
-    gold_idx = GemIndex[Gem.GOLD]
+    gold_idx = self.config.gold_idx
     if gem_mask is None:
-      gem_mask = np.ones(GEM_COUNT, dtype=bool)
+      gem_mask = np.ones(self.config.gem_count, dtype=bool)
     gem_mask[gold_idx] = False
 
     # sample a single gem index (as a one-hot/count vector)
-    gem_sampled = sample_exact(GEM_COUNT, 1, dtype=np.int8, mask=gem_mask, p=gem_p, replacement=False, rng=self.np_random)
+    gem_sampled = sample_exact(self.config.gem_count, 1, dtype=np.int8, mask=gem_mask, p=gem_p, replacement=False, rng=self.np_random)
     # convert one-hot vector into scalar index; if none chosen keep as 0
     chosen_idxs = np.flatnonzero(gem_sampled)
     gem_idx = int(chosen_idxs[0]) if chosen_idxs.size > 0 else 0
@@ -245,14 +245,14 @@ class Take2Space(spaces.Dict):
     ret_mask = None if mask is None else np.asarray(mask['ret'], dtype=bool).copy()
     ret_p = None if probability is None else probability['ret']
     if ret_mask is None:
-      ret_mask_final = np.ones(GEM_COUNT, dtype=bool)
+      ret_mask_final = np.ones(self.config.gem_count, dtype=bool)
     else:
       ret_mask_final = np.asarray(ret_mask, dtype=bool).copy()
     # cannot return the gem being taken
     ret_mask_final[gem_idx] = False
 
     ret_count = int(self.np_random.integers(0, count + 1))
-    ret_sampled = sample_exact(GEM_COUNT, int(ret_count), dtype=np.int8, mask=ret_mask_final, p=ret_p, replacement=True, rng=self.np_random)
+    ret_sampled = sample_exact(self.config.gem_count, int(ret_count), dtype=np.int8, mask=ret_mask_final, p=ret_p, replacement=True, rng=self.np_random)
 
     return {
       'gem': np.array(gem_idx, dtype=np.int8),
@@ -279,13 +279,13 @@ class BuyCardSpace(spaces.Dict):
       buy['card_idx'][...] = self.config.flatten_card_idx(action.idx)
     buy['payment'][...] = 0
     for gem, amount in action.payment or ():
-      buy['payment'][GemIndex[gem]] = int(amount)
+      buy['payment'][self.config.gem_idx[gem]] = int(amount)
 
   def _decode(self, data: "BuyDict") -> BuyCardAction:
     flat = int(data['card_idx'])
     idx = self.config.unflatten_card_idx(flat)
     pay_vec = data['payment']
-    payment = {GemList[i]: int(pay_vec[i]) for i in range(len(pay_vec)) if int(pay_vec[i]) > 0}
+    payment = self.config.decode_gems_list(pay_vec)
     return BuyCardAction.create(idx, None, payment=payment)
 
 class ReserveCardSpace(spaces.Dict):
@@ -294,6 +294,7 @@ class ReserveCardSpace(spaces.Dict):
     super().__init__({
       'card_idx': spaces.Discrete(config.card_visible_total_count + config.card_max_count_reserved + config.card_level_count),
       'take_gold': spaces.Discrete(2),
+      'ret_count': spaces.Box(0, 1),
       'ret': spaces.Box(low=0, high=1, shape=(config.gem_count,), dtype=np.int8),
     }, seed, **spaces_kwargs)
 
@@ -303,15 +304,16 @@ class ReserveCardSpace(spaces.Dict):
     if action.idx is not None:
       reserve['card_idx'][...] = self.config.flatten_card_idx(action.idx)
     reserve['take_gold'][...] = int(bool(action.take_gold))
+    reserve['ret_count'][...] = 1 if action.ret is not None else 0
     reserve['ret'][...] = 0
     if action.ret is not None:
-      reserve['ret'][GemIndex[action.ret]] = 1
+      reserve['ret'][self.config.gem_idx[action.ret]] = 1
 
   def _decode(self, data: "ReserveDict") -> ReserveCardAction:
     flat = int(data['card_idx'])
     idx = self.config.unflatten_card_idx(flat)
     take_gold = bool(int(data['take_gold']))
-    _ret = self.config.decode_ret_gems(data['ret'])
+    _ret = self.config.decode_gems_list(data['ret'])
     ret = None
     for g in _ret or ():
       ret = g
@@ -375,6 +377,7 @@ class ActionSpace(spaces.Dict):
       'reserve': {
         'card_idx': np.array(0, dtype=np.uint16),
         'take_gold': np.array(0, dtype=np.int8),
+        'ret_count': np.array(0, dtype=np.int8),
         'ret': np.zeros(self._gem_count, dtype=np.int8),
       },
     }
