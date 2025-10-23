@@ -1,5 +1,6 @@
 from gems.actions import (
   Action,
+  BuyCardActionGold,
   NoopAction,
   Take3Action,
   Take2Action,
@@ -49,13 +50,29 @@ def test_action_constructors_basic():
   assert any(g == Gem.BLACK for g, _ in a3.payment)
   assert str(a3) == "Action.Buy(<[0]=card-1>, 1⚫1🟢)"
 
-  card2 = Card(id='card-2', level=1)
-  a4 = Action.reserve(card2, take_gold=True, visible_idx=0)
+  card2 = Card(id='card-2', level=1, cost={Gem.BLACK: 2, Gem.RED: 1, Gem.GREEN: 1})
+  a3_1 = BuyCardActionGold.create(CardIdx(visible_idx=0), card2, payment={Gem.BLACK: 1, Gem.GREEN: 1})
+  assert isinstance(a3_1, BuyCardActionGold)
+  assert a3_1.type == ActionType.BUY_CARD
+  assert a3_1.card is card2
+  assert a3_1.idx == CardIdx(visible_idx=0)
+  assert a3_1.payment.count() == 0
+  assert any(g == Gem.BLACK for g, _ in a3_1.gold_payment)
+  assert str(a3_1) == "Action.Buy(<[0]=card-2>, {2🟡=1⚫1🟢})"
+  a3_2 = a3_1.normalize(card2)
+  assert isinstance(a3_2, BuyCardAction)
+  assert a3_2.card is a3_1.card
+  assert a3_2.idx == a3_1.idx
+  assert dict(a3_2.payment) == {Gem.BLACK: 1, Gem.RED: 1, Gem.GOLD: 2}
+  assert str(a3_2) == "Action.Buy(<[0]=card-2>, 2🟡1⚫1🔴)"
+
+  card3 = Card(id='card-3', level=1)
+  a4 = Action.reserve(card3, take_gold=True, visible_idx=0)
   assert isinstance(a4, Action)
   assert isinstance(a4, ReserveCardAction)
   assert a4.type == ActionType.RESERVE_CARD
   assert a4.take_gold is True
-  assert str(a4) == "Action.Reserve(<[0]=card-2>, 🟡)"
+  assert str(a4) == "Action.Reserve(<[0]=card-3>, 🟡)"
 
   a5 = Action.take3(Gem.RED, Gem.BLUE, Gem.GREEN, ret_map = {Gem.WHITE: 2})
   assert isinstance(a5, Action)

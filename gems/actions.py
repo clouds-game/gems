@@ -465,13 +465,12 @@ class BuyCardAction(Action):
     player_gems = dict(player.gems)
     visible_cards = list(state.visible_cards)
 
-    payment = dict(getattr(self, 'payment', ()))
     # locate card according to idx
     if self.idx is None:
       raise ValueError("BuyCardAction requires an idx to locate the card")
     found = None
     from_reserved = False
-    reserved_list: list = []
+    reserved_list: list[Card] = []
     if self.idx.visible_idx is not None:
       vi = int(self.idx.visible_idx)
       if vi < 0 or vi >= len(visible_cards):
@@ -492,6 +491,7 @@ class BuyCardAction(Action):
     else:
       # deck_head_level not supported for apply (would require drawing)
       raise ValueError("deck_head_level idx is not supported for BuyCardAction.apply")
+    payment = self._get_payment(found)
 
     # apply payment: deduct from player_gems and add to bank
     for g, amt in payment.items():
@@ -519,6 +519,12 @@ class BuyCardAction(Action):
                      visible_cards_in=visible_cards, turn=state.turn,
                      last_action=self)
 
+  def _get_payment(self, card: Card):
+    return dict(self.payment)
+
+  def _check_afford(self, player: PlayerState, card: Card) -> bool:
+    return player.check_afford(card, self._get_payment(card))
+
   def _check_with_state(self, player: PlayerState, state: GameState, config: GameConfig) -> bool:
     # require idx to be set and match
     if self.idx is None:
@@ -531,7 +537,7 @@ class BuyCardAction(Action):
         return False
       if self.card is not None and c.id != self.card.id:
         return False
-      return player.check_afford(c, dict(self.payment))
+      return self._check_afford(player, c)
     if self.idx.reserve_idx is not None:
       ri = int(self.idx.reserve_idx)
       try:
@@ -540,12 +546,18 @@ class BuyCardAction(Action):
         return False
       if self.card is not None and c.id != self.card.id:
         return False
-      return player.check_afford(c, dict(self.payment))
+      return self._check_afford(player, c)
     # deck_head_level can't be checked here
     return False
 
   def _check_without_state(self, config: GameConfig) -> bool:
-    # No config-only checks for BuyCardAction (payments validated with player/state)
+    if self.idx is not None:
+      if self.idx.deck_head_level is not None:
+        # deck_head_level idx is not supported for BuyCardAction
+        return False
+    elif self.card is None:
+      # must provide at least one of idx or card
+      return False
     return True
 
   @classmethod
@@ -566,6 +578,53 @@ class BuyCardAction(Action):
         actions.append(cls.create(idx, card, payment=payment))
     return actions
 
+@dataclass(frozen=True)
+class BuyCardActionGold(BuyCardAction):
+  gold_payment: GemList = field(default_factory=GemList)
+
+  def __str__(self) -> str:
+    cid = self.card.id if self.card is not None else None
+    gold_count = self.gold_payment.count()
+    card_str = f"<{cid}>" if self.idx is None else self.idx.to_str(cid)
+    if gold_count:
+      return f"Action.Buy({card_str}, {{{GemList({Gem.GOLD: gold_count})}={self.gold_payment}}})"
+    return f"Action.Buy({card_str}, {{0{Gem.GOLD.color_circle()}}})"
+
+  @classmethod
+  def create(cls, card_idx: CardIdx | None, card: Card | None = None, payment: Mapping[Gem, int] | None = None) -> 'BuyCardActionGold':
+    gp = GemList(dict(payment) if payment is not None else {})
+    return cls(type=ActionType.BUY_CARD, idx=card_idx, card=card, gold_payment=gp)
+
+  def to_dict(self) -> dict:
+    d = super().to_dict()
+    d['gold_payment'] = [(g.value, n) for g, n in self.gold_payment]
+    del d['payment']
+    return d
+
+  @classmethod
+  def from_dict(cls, d: dict) -> 'BuyCardActionGold':
+    card_d = d.get('card')
+    card = Card.from_dict(card_d) if card_d is not None else None
+    gold_pay_raw = d.get('gold_payment', [])
+    gold_payment = {Gem(g): n for g, n in gold_pay_raw}
+    idx_raw = d.get('idx') or {}
+    visible_idx = idx_raw.get('visible_idx')
+    reserve_idx = idx_raw.get('reserve_idx')
+    deck_head_level = idx_raw.get('deck_head_level')
+    idx = CardIdx(visible_idx=visible_idx, reserve_idx=reserve_idx, deck_head_level=deck_head_level) if idx_raw else None
+    return cls.create(idx, card, payment=gold_payment)
+
+  def _get_payment(self, card: Card):
+    payment = {Gem.GOLD: self.gold_payment.count()}
+    for g, cost in card.cost:
+      count = cost - self.gold_payment.get(g)
+      if count > 0:
+        payment[g] = count
+    return payment
+
+  def normalize(self, card: Card) -> 'BuyCardAction':
+    payment = self._get_payment(card)
+    return BuyCardAction.create(self.idx, self.card, payment=payment)
 
 @dataclass(frozen=True)
 class ReserveCardAction(Action):
