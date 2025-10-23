@@ -591,6 +591,8 @@ class ReserveCardAction(Action):
       if self.ret:
         ext = f"{ext}-{self.ret.color_circle()}"
       ext = f", {ext}"
+    elif self.ret:
+      ext = f", -{self.ret.color_circle()}"
     if self.idx is None:
       return f"Action.Reserve(<{cid}>{ext})"
     return f"Action.Reserve({self.idx.to_str(cid)}{ext})"
@@ -702,12 +704,16 @@ class ReserveCardAction(Action):
   def _check_without_state(self, config: GameConfig) -> bool:
     # could only return a gem if taking gold
     if self.ret is not None and not self.take_gold:
+      print(self.ret, self.take_gold)
+      assert False
       return False
     # self.idx must specify visible_idx (deck_head_level/reserve_idx not supported)
     if self.idx is not None:
       if self.idx.visible_idx is None and self.idx.deck_head_level is None:
+        assert False
         return False
     elif self.card is None:
+      assert False
       return False
     return True
 

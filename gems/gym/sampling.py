@@ -67,3 +67,28 @@ def sample_exact_idx(n: int, p: np.ndarray, *, replacement: bool = False, rng: n
     chosen_idx = rng.choice(available, size=take_count, replace=False, p=weights)
 
   return chosen_idx
+
+def sample_single(total: int, *, dtype: type[T] = np.int64, mask: Sequence[bool] | np.ndarray | None = None, p: Sequence[float] | np.ndarray | None = None, seed: int | None = None, rng: np.random.Generator | None = None) -> T:
+  """Sample a single index or population element from a weighted distribution with mask support.
+
+  Behaviour details:
+  - `mask` is interpreted as a boolean array-like. Entries where mask is
+    truthy are eligible for sampling.
+  - `p` provides non-negative weights for every index. We zero-out
+    weights where mask is False.
+  - If the (masked) total weight is non-finite or <= 0, ValueError is raised.
+  - The function returns a single sampled index (dtype int) or element from
+    `x` if provided.
+  """
+  p_arr = np.asarray(p, dtype=float) if p is not None else np.ones(total, dtype=float)
+  if p_arr.size != total:
+    raise ValueError("p length does not match total")
+  if mask is not None:
+    mask_arr = np.asarray(mask, dtype=bool)
+    if mask_arr.shape != p_arr.shape:
+      raise ValueError("mask length does not match p")
+    p_arr = p_arr.copy()
+    p_arr[~mask_arr] = 0.0
+  rng = rng or np.random.default_rng(seed)
+  chosen_idx = rng.choice(total, size=1, replace=False, p=p_arr / p_arr.sum()).astype(dtype)
+  return chosen_idx[0]

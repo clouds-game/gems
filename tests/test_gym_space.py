@@ -212,3 +212,30 @@ def test_sample_take2_dict():
     action = take2_space._decode(d)
     assert isinstance(action, Take2Action)
     assert action._check_without_state(config)
+
+def test_sample_reserve_card_dict():
+  from gems.gym.action_space import ReserveCardSpace
+  config = GameConfig()
+  aspace = ActionSpace(config)
+  reserve_space = cast(ReserveCardSpace, aspace.spaces['reserve'])
+
+  from gems.actions import ReserveCardAction
+  for _ in range(1000):
+    d = reserve_space._sample()
+    assert set(d.keys()) >= {'take_gold', 'card_idx', 'ret_count', 'ret'}
+    take_gold = bool(d['take_gold'])
+    card_idx = int(d['card_idx'])
+    ret_arr = np.asarray(d['ret'], dtype=np.int8)
+    ret_count = int(d['ret_count'])
+    # card_idx must be within range
+    assert 0 <= card_idx < reserve_space.config.max_card_index
+    # ret_count matches returned array sum
+    assert ret_count == int(ret_arr.sum())
+    # ret_count cannot exceed max gems allowed to return when reserving
+    max_returnable = min(2, sum(config.gem_count - 1 for g in Gem if g != Gem.GOLD))
+    assert 0 <= ret_count <= max_returnable
+
+    action = reserve_space._decode(d)
+    print(action)
+    assert isinstance(action, ReserveCardAction)
+    assert action._check_without_state(config)

@@ -81,7 +81,7 @@ def test_sample_take3():
 
   space = Take3Space(GameConfig(), seed=123)
 
-  a = space.sample()
+  a = space._sample()
   assert a['gems_count'] == 3
   assert a['ret_count'] == 3
   assert np.all(a['gems'] == [1, 1, 0, 1, 0, 0])
@@ -93,8 +93,21 @@ def test_sample_take2():
 
   space = Take2Space(GameConfig(), seed=123)
 
-  a = space.sample()
+  a = space._sample()
   assert a['gem'] == 1
   assert a['count'] == 2
+  assert a['ret_count'] == 0
+  assert np.all(a['ret'] == [0, 0, 0, 0, 0, 0])
+
+def test_sample_reserved_card():
+  from gems.gym.action_space import ReserveCardSpace
+  from gems.consts import GameConfig
+
+  config = GameConfig()
+  space = ReserveCardSpace(config, seed=123)
+
+  a = space._sample()
+  assert a['take_gold'] == 0
+  assert a['card_idx'] == 6
   assert a['ret_count'] == 0
   assert np.all(a['ret'] == [0, 0, 0, 0, 0, 0])

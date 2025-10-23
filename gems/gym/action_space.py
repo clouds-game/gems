@@ -17,7 +17,7 @@ from ..typings import Gem, ActionType, CardIdx
 from ..consts import GameConfig
 
 from ._common import NDArray1D, Scalar
-from .sampling import sample_exact
+from .sampling import sample_exact, sample_single
 
 
 # Generic scalar type for array elements; default to np.int8 for backward compat
@@ -65,6 +65,10 @@ class ActionSpaceConfig(GameConfig):
   @property
   def gold_idx(self) -> int:
     return self.gem_idx[Gem.GOLD]
+
+  @property
+  def max_card_index(self) -> int:
+    return self.card_visible_total_count + self.card_max_count_reserved + self.card_level_count
 
   def flatten_card_idx(self, idx: CardIdx) -> int:
     """Flatten a CardIdx into an integer index using this config.
@@ -233,10 +237,7 @@ class Take2Space(spaces.Dict):
     gem_mask[gold_idx] = False
 
     # sample a single gem index (as a one-hot/count vector)
-    gem_sampled = sample_exact(self.config.gem_count, 1, dtype=np.int8, mask=gem_mask, p=gem_p, replacement=False, rng=self.np_random)
-    # convert one-hot vector into scalar index; if none chosen keep as 0
-    chosen_idxs = np.flatnonzero(gem_sampled)
-    gem_idx = int(chosen_idxs[0]) if chosen_idxs.size > 0 else 0
+    gem_idx = sample_single(self.config.gem_count, dtype=np.int8, mask=gem_mask, p=gem_p, rng=self.np_random)
 
     # choose count: 2
     count = 2
@@ -319,6 +320,46 @@ class ReserveCardSpace(spaces.Dict):
       ret = g
       break
     return ReserveCardAction.create(idx, None, take_gold=take_gold, ret=ret)
+
+  def _sample(self, mask: ReserveDict[np.bool] | None = None, probability: ReserveDict[np.floating] | None = None) -> ReserveDict:
+    # card_idx: choose among flattened indices
+    card_mask = None if mask is None else np.asarray(mask['card_idx'], dtype=bool).copy()
+    card_p = None if probability is None else probability['card_idx']
+
+    max_card_index = self.config.card_visible_total_count + self.config.card_max_count_reserved + self.config.card_level_count
+    if card_mask is None:
+      card_mask = np.ones(max_card_index, dtype=bool)
+    else:
+      card_mask = np.asarray(card_mask, dtype=bool).copy()
+    # cannot select reserve indices when performing a reserve action
+    card_mask[:self.config.card_max_count_reserved] = False
+    card_idx = sample_single(max_card_index, dtype=np.uint16, mask=card_mask, p=card_p, rng=self.np_random)
+
+    # take_gold: sample 0 or 1
+    take_gold = int(self.np_random.integers(0, 2))
+
+    # ret: at most one non-gold gem may be returned
+    ret_mask = None if mask is None else np.asarray(mask['ret'], dtype=bool).copy()
+    ret_p = None if probability is None else probability['ret']
+    if ret_mask is None:
+      ret_mask_final = np.ones(self.config.gem_count, dtype=bool)
+    else:
+      ret_mask_final = np.asarray(ret_mask, dtype=bool).copy()
+    # cannot return gold when reserving
+    ret_mask_final[self.config.gold_idx] = False
+
+    ret_count = int(self.np_random.integers(0, take_gold + 1))
+    if ret_count == 0:
+      ret_sampled = np.zeros(self.config.gem_count, dtype=np.int8)
+    else:
+      ret_sampled = sample_exact(self.config.gem_count, 1, dtype=np.int8, mask=ret_mask_final, p=ret_p, replacement=False, rng=self.np_random)
+
+    return {
+      'card_idx': np.array(card_idx, dtype=np.uint16),
+      'take_gold': np.array(take_gold, dtype=np.int8),
+      'ret_count': np.array(ret_count, dtype=np.int8),
+      'ret': ret_sampled,
+    }
 
 
 class ActionSpace(spaces.Dict):
