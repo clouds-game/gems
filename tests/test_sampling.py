@@ -99,6 +99,18 @@ def test_sample_take2():
   assert a['ret_count'] == 0
   assert np.all(a['ret'] == [0, 0, 0, 0, 0, 0])
 
+def test_sample_buy_card():
+  from gems.gym.action_space import BuyCardSpace
+  from gems.consts import GameConfig
+
+  config = GameConfig()
+  space = BuyCardSpace(config, seed=124) # seed=123 has card_idx == 0
+
+  a = space._sample()
+  assert a['card_idx'] == 14
+  assert a['payment_count'] == 3
+  assert np.all(a['payment'] == [0, 0, 0, 2, 1, 0])
+
 def test_sample_reserved_card():
   from gems.gym.action_space import ReserveCardSpace
   from gems.consts import GameConfig

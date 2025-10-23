@@ -213,6 +213,29 @@ def test_sample_take2_dict():
     assert isinstance(action, Take2Action)
     assert action._check_without_state(config)
 
+def test_sample_buy_card_dict():
+  from gems.gym.action_space import BuyCardSpace
+  config = GameConfig()
+  aspace = ActionSpace(config)
+  buy_space = cast(BuyCardSpace, aspace.spaces['buy'])
+
+  from gems.actions import BuyCardAction
+  for _ in range(1000):
+    d = buy_space._sample()
+    assert set(d.keys()) >= {'card_idx', 'payment_count', 'payment'}
+    card_idx = int(d['card_idx'])
+    payment_count = int(d['payment_count'])
+    payment_arr = np.asarray(d['payment'], dtype=np.int8)
+    # card_idx must be within range
+    assert 0 <= card_idx < buy_space.config.max_card_index
+    # payment_count matches payment array sum
+    assert payment_count == int(payment_arr.sum())
+
+    action = buy_space._decode(d)
+    print(action)
+    assert isinstance(action, BuyCardAction)
+    assert action._check_without_state(config)
+
 def test_sample_reserve_card_dict():
   from gems.gym.action_space import ReserveCardSpace
   config = GameConfig()

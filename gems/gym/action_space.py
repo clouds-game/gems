@@ -291,6 +291,46 @@ class BuyCardSpace(spaces.Dict):
     payment = self.config.decode_gems_list(pay_vec)
     return BuyCardActionGold.create(idx, None, payment=payment)
 
+  def _sample(self, mask: BuyDict[np.bool] | None = None, probability: BuyDict[np.floating] | None = None) -> BuyDict:
+    # card_idx: choose among flattened indices (visible + reserve + deck levels)
+    card_mask = None if mask is None else np.asarray(mask['card_idx'], dtype=bool).copy()
+    card_p = None if probability is None else probability['card_idx']
+
+    max_card_index = self.config.max_card_index
+    if card_mask is None:
+      card_mask = np.ones(max_card_index, dtype=bool)
+    else:
+      card_mask = np.asarray(card_mask, dtype=bool).copy()
+    card_mask[-self.config.card_level_count:] = False
+    card_idx = sample_single(max_card_index, dtype=np.uint16, mask=card_mask, p=card_p, rng=self.np_random)
+
+    # payment: sample a payment vector across gems (including gold). We allow 0..max_cost per gem
+    pay_mask = None if mask is None else np.asarray(mask['payment'], dtype=bool).copy()
+    pay_p = None if probability is None else probability['payment']
+
+    # choose how many payment tokens are used in total (0..coin_gold_init)
+    # keep it small for sampling: up to coin_gold_init
+    max_pay_total = self.config.coin_gold_init
+    payment_count = int(self.np_random.integers(0, max_pay_total + 1))
+
+    if pay_mask is None:
+      pay_mask_final = np.ones(self.config.gem_count, dtype=bool)
+    else:
+      pay_mask_final = np.asarray(pay_mask, dtype=bool).copy()
+    pay_mask_final[self.config.gold_idx] = False  # exclude gold from payment sampling
+
+    # sample_exact allows replacement so we can distribute payment_count across gems
+    payment_sampled = sample_exact(self.config.gem_count, int(payment_count), dtype=np.int8, mask=pay_mask_final, p=pay_p, replacement=True, rng=self.np_random)
+
+    return {
+      'card_idx': np.array(card_idx, dtype=np.uint16),
+      'payment_count': np.array(payment_count, dtype=np.int8),
+      'payment': payment_sampled,
+    }
+
+  def sample(self, mask = None, probability = None) -> dict[str, Any]:
+    return self._sample(mask=mask, probability=probability) # type: ignore[TypedDict]
+
 class ReserveCardSpace(spaces.Dict):
   def __init__(self, config: ActionSpaceConfig | GameConfig, *, seed = None, **spaces_kwargs):
     self.config = config if isinstance(config, ActionSpaceConfig) else ActionSpaceConfig(config)
@@ -362,6 +402,9 @@ class ReserveCardSpace(spaces.Dict):
       'ret_count': np.array(ret_count, dtype=np.int8),
       'ret': ret_sampled,
     }
+
+  def sample(self, mask = None, probability = None) -> dict[str, Any]:
+    return self._sample(mask=mask, probability=probability) # type: ignore[TypedDict]
 
 
 class ActionSpace(spaces.Dict):
