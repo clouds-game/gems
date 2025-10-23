@@ -6,6 +6,7 @@ from gems.actions import (
   BuyCardAction,
   ReserveCardAction,
 )
+from gems.consts import GameConfig
 from gems.typings import (
   ActionType,
   CardIdx,
@@ -74,6 +75,35 @@ def test_action_constructors_basic():
   assert a6.ret is not None
   assert a6.ret.to_dict() == {Gem.RED: 1}
   assert str(a6) == "Action.Take2(2⚪-1🔴)"
+
+
+def test_action_take3_checks():
+  config = GameConfig()
+
+  # valid: three distinct non-gold gems
+  a_valid = Take3Action.create(Gem.RED, Gem.BLUE, Gem.GREEN)
+  assert a_valid._check_without_state(config)
+
+  # invalid: more than 3 gems
+  a_too_many = Take3Action.create(Gem.RED, Gem.BLUE, Gem.GREEN, Gem.WHITE)
+  assert not a_too_many._check_without_state(config)
+
+  # invalid: duplicate gems
+  a_dup = Take3Action.create(Gem.RED, Gem.RED, Gem.BLUE)
+  assert not a_dup._check_without_state(config)
+
+  # invalid: contains gold
+  a_gold = Take3Action.create(Gem.RED, Gem.GOLD, Gem.BLUE)
+  assert not a_gold._check_without_state(config)
+
+  # invalid: returning a gem that's also being taken
+  a_ret_overlap = Take3Action.create(Gem.RED, Gem.BLUE, Gem.GREEN, ret_map={Gem.BLUE: 1})
+  assert not a_ret_overlap._check_without_state(config)
+
+  # valid: returns a gem not in taken list
+  a_ret_ok = Take3Action.create(Gem.RED, Gem.BLUE, Gem.GREEN, ret_map={Gem.WHITE: 1})
+  assert a_ret_ok._check_without_state(config)
+
 
 
 def test_action_serialize_roundtrip():

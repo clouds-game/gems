@@ -236,7 +236,11 @@ class Take3Action(Action):
     if len(self.gems) > 3:
       return False
     # gems must be distinct
-    if len(set(self.gems)) != len(self.gems):
+    gems_set = set(self.gems)
+    if len(gems_set) != len(self.gems):
+      return False
+    # cannot return gems that are also being taken
+    if self.ret and any(g in gems_set for g, _ in self.ret):
       return False
     # none of the gems may be gold (gold cannot be taken as part of take-3)
     if any(g == Gem.GOLD for g in self.gems):
