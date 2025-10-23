@@ -50,19 +50,6 @@ def test_action_space_decode_invalid_type_raises():
     aspace.decode(d)
 
 
-def test_action_space_decode_take2_no_gem_raises():
-  config = GameConfig()
-  aspace = ActionSpace(config)
-  d = aspace.empty()
-  from gems.typings import ActionType
-  # set type to TAKE_2_SAME but leave gem vector empty
-  d['type'][...] = aspace._type_index[ActionType.TAKE_2_SAME]
-  d['take2']['gem'][...] = 0
-  import pytest
-  with pytest.raises(ValueError):
-    aspace.decode(d)
-
-
 def test_state_space_empty_obs_shapes():
   # create a StateSpace and request an observation with engine=None
   config = GameConfig(num_players=2)

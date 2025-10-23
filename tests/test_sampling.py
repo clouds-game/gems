@@ -84,5 +84,5 @@ def test_sample_take3():
   a = space.sample()
   assert a['gems_count'] == 3
   assert a['ret_count'] == 3
-  assert np.all(a['gems'] == [1, 1, 0, 0, 1, 0])
-  assert np.all(a['ret'] == [1, 0, 0, 0, 0, 2])
+  assert np.all(a['gems'] == [1, 1, 0, 1, 0, 0])
+  assert np.all(a['ret'] == [0, 0, 1, 0, 0, 2])

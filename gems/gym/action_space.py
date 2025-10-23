@@ -33,10 +33,10 @@ class Take3Dict(TypedDict, Generic[T]):
   gems: NDArray1D[T]
   ret: NDArray1D[T]
 
-class Take2Dict(TypedDict):
-  gem: NDArray1D[np.int8]
-  count: Scalar[np.int8]
-  ret: NDArray1D[np.int8]
+class Take2Dict(TypedDict, Generic[T]):
+  gem: Scalar[T]
+  count: Scalar[T]
+  ret: NDArray1D[T]
 
 class BuyDict(TypedDict):
   # flattened card index (0..visible+reserved-1)
@@ -131,7 +131,7 @@ class Take3Space(spaces.Dict):
 class Take2Space(spaces.Dict):
   def __init__(self, config: GameConfig, *, seed = None, **spaces_kwargs):
     super().__init__({
-      'gem': spaces.MultiBinary(config.gem_count),
+      'gem': spaces.Discrete(config.gem_count),
       'count': spaces.Discrete(3),
       'ret': spaces.Box(low=0, high=config.coin_max_count_per_player, shape=(config.gem_count,), dtype=np.int8),
     }, seed, **spaces_kwargs)
@@ -139,8 +139,7 @@ class Take2Space(spaces.Dict):
   @classmethod
   def _encode(cls, data: "Take2Dict", action: Take2Action):
     take2 = data
-    take2['gem'][...] = 0
-    take2['gem'][GemIndex[action.gem]] = 1
+    take2['gem'][...] = GemIndex[action.gem]
     take2['count'][...] = int(action.count)
     take2['ret'][...] = 0
     for gem_ret, amount in action.ret or ():
@@ -148,15 +147,8 @@ class Take2Space(spaces.Dict):
 
   @classmethod
   def _decode(cls, data: "Take2Dict") -> Take2Action:
-    gem_vec = data['gem']
-    gem_idx = None
-    for i, v in enumerate(gem_vec):
-      if int(v) != 0:
-        gem_idx = i
-        break
-    if gem_idx is None:
-      raise ValueError("Invalid Take2 encoding: no gem selected")
-    gem = GemList[gem_idx]
+    gem_idx = data['gem']
+    gem = GemList[int(gem_idx)]
     count = int(data['count'])
     ret = ActionSpace._decode_ret_gems(data['ret'])
     return Take2Action.create(gem, count, ret_map=ret)
@@ -256,7 +248,7 @@ class ActionSpace(spaces.Dict):
         'ret': np.zeros(self._gem_count, dtype=np.int8),
       },
       'take2': {
-        'gem': np.zeros(self._gem_count, dtype=np.int8),
+        'gem': np.array(0, dtype=np.int8),
         'count': np.array(0, dtype=np.int8),
         'ret': np.zeros(self._gem_count, dtype=np.int8),
       },
