@@ -15,28 +15,28 @@ def test_action_space_cardidx_flatten_unflatten():
   # visible index
   from gems.typings import CardIdx
   v = CardIdx(visible_idx=2)
-  flat_v = aspace._flatten_card_idx(v)
-  round_v = aspace._unflatten_card_idx(flat_v)
+  flat_v = aspace.config.flatten_card_idx(v)
+  round_v = aspace.config.unflatten_card_idx(flat_v)
   assert isinstance(round_v, CardIdx)
   assert round_v.visible_idx == 2
 
   # reserve index
   r = CardIdx(reserve_idx=1)
-  flat_r = aspace._flatten_card_idx(r)
-  round_r = aspace._unflatten_card_idx(flat_r)
+  flat_r = aspace.config.flatten_card_idx(r)
+  round_r = aspace.config.unflatten_card_idx(flat_r)
   assert isinstance(round_r, CardIdx)
   assert round_r.reserve_idx == 1
 
   # deck head level
   d = CardIdx(deck_head_level=3)
-  flat_d = aspace._flatten_card_idx(d)
-  round_d = aspace._unflatten_card_idx(flat_d)
+  flat_d = aspace.config.flatten_card_idx(d)
+  round_d = aspace.config.unflatten_card_idx(flat_d)
   assert isinstance(round_d, CardIdx)
   assert round_d.deck_head_level == 3
 
   # out of range / negative -> None
-  assert aspace._unflatten_card_idx(-5) is None
-  assert aspace._unflatten_card_idx(aspace._max_card_index + 10) is None
+  assert aspace.config.unflatten_card_idx(-5) is None
+  assert aspace.config.unflatten_card_idx(aspace._max_card_index + 10) is None
 
 
 def test_action_space_decode_invalid_type_raises():

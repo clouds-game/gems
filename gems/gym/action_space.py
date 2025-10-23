@@ -6,6 +6,7 @@ RL agents and gymnasium interfaces.
 """
 from __future__ import annotations
 
+from dataclasses import asdict
 from typing import Any, TypeAlias, TypeVar, Sequence, TypedDict, cast, Generic
 
 import numpy as np
@@ -58,19 +59,69 @@ class ActionDict(TypedDict, Generic[T, U]):
   reserve: "ReserveDict[T, U]"
 
 
+class ActionSpaceConfig(GameConfig):
+  gem_list: list[Gem] = list(Gem)
+  gem_idx: dict[Gem, int] = {g: i for i, g in enumerate(Gem)}
+
+  def __init__(self, config: GameConfig):
+    super().__init__(**asdict(config))
+
+  def flatten_card_idx(self, idx: CardIdx) -> int:
+    """Flatten a CardIdx into an integer index using this config.
+
+    Layout (flattened index):
+    - 0..(visible-1) => visible_idx
+    - visible..(visible+reserved-1) => reserve_idx (offset by visible)
+    - visible+reserved.. => deck_head_level (offset by visible+reserved), one entry per level
+    Returns -1 when idx is None or no field is set.
+    """
+    if idx is None:
+      return -1
+    if idx.visible_idx is not None:
+      return int(idx.visible_idx)
+    if idx.reserve_idx is not None:
+      return int(self.card_visible_total_count + int(idx.reserve_idx))
+    if idx.deck_head_level is not None:
+      level = int(idx.deck_head_level) - 1
+      return int(self.card_visible_total_count + self.card_max_count_reserved + level)
+    return -1
+
+  def unflatten_card_idx(self, flat: int) -> CardIdx | None:
+    """Inverse of flatten_card_idx: turn integer index back into CardIdx.
+
+    Returns None only if `flat` is negative. Note: callers may pass 0
+    which is a valid visible index (0) so treat 0 normally.
+    """
+    if flat is None:
+      return None
+    try:
+      idx = int(flat)
+    except Exception:
+      return None
+    if idx < 0:
+      return None
+    if idx < self.card_visible_total_count:
+      return CardIdx(visible_idx=idx)
+    if idx < self.card_visible_total_count + self.card_max_count_reserved:
+      return CardIdx(reserve_idx=idx - self.card_visible_total_count)
+    if idx < self.card_visible_total_count + self.card_max_count_reserved + self.card_level_count:
+      level = (idx - self.card_visible_total_count - self.card_max_count_reserved) + 1
+      return CardIdx(deck_head_level=level)
+    return None
+
 class Take3Space(spaces.Dict):
-  def __init__(self, config: GameConfig, *, seed = None, **spaces_kwargs):
+  def __init__(self, config: ActionSpaceConfig, *, seed = None, **spaces_kwargs):
+    self.config = config
     self._gems = spaces.Box(low=0, high=1, shape=(config.gem_count,), dtype=np.int8)
     self._ret = spaces.Box(low=0, high=config.coin_max_count_per_player, shape=(config.gem_count,), dtype=np.int8)
     super().__init__({
-      'gems_count': spaces.Box(1, 4),
-      'ret_count': spaces.Box(0, 4),
+      'gems_count': spaces.Box(1, config.take3_count + 1),
+      'ret_count': spaces.Box(0, config.take3_count + 1),
       'gems': self._gems,
       'ret': self._ret,
     }, seed, **spaces_kwargs)
 
-  @classmethod
-  def _encode(cls, data: "Take3Dict", action: Take3Action):
+  def _encode(self, data: "Take3Dict", action: Take3Action):
     take3 = data
     take3['gems'][...] = 0
     for gem in action.gems:
@@ -83,8 +134,7 @@ class Take3Space(spaces.Dict):
       take3['ret'][GemIndex[gem]] = int(amount)
     take3['ret_count'][...] = ret_count
 
-  @classmethod
-  def _decode(cls, data: "Take3Dict") -> Take3Action:
+  def _decode(self, data: "Take3Dict") -> Take3Action:
     gems_vec = data['gems']
     gems = tuple(gem for gem, v in zip(GemList, gems_vec) if int(v) != 0)
     ret_vec = data['ret']
@@ -131,7 +181,8 @@ class Take3Space(spaces.Dict):
     return self._sample(mask=mask, probability=probability) # type: ignore[TypedDict]
 
 class Take2Space(spaces.Dict):
-  def __init__(self, config: GameConfig, *, seed = None, **spaces_kwargs):
+  def __init__(self, config: ActionSpaceConfig, *, seed = None, **spaces_kwargs):
+    self.config = config
     super().__init__({
       'gem': spaces.Discrete(config.gem_count),
       'count': spaces.Discrete(3),
@@ -200,7 +251,8 @@ class Take2Space(spaces.Dict):
     return self._sample(mask=mask, probability=probability) # type: ignore[TypedDict]
 
 class BuyCardSpace(spaces.Dict):
-  def __init__(self, config: GameConfig, *, seed = None, **spaces_kwargs):
+  def __init__(self, config: ActionSpaceConfig, *, seed = None, **spaces_kwargs):
+    self.config = config
     super().__init__({
       'card_idx': spaces.Discrete(config.card_visible_total_count + config.card_max_count_reserved + config.card_level_count),
       'payment': spaces.Box(low=0, high=255, shape=(config.gem_count,), dtype=np.int32),
@@ -211,7 +263,7 @@ class BuyCardSpace(spaces.Dict):
     buy = data
     buy['card_idx'][...] = 0
     if action.idx is not None:
-      buy['card_idx'][...] = owner._flatten_card_idx(action.idx)
+      buy['card_idx'][...] = owner.config.flatten_card_idx(action.idx)
     buy['payment'][...] = 0
     for gem, amount in action.payment or ():
       buy['payment'][GemIndex[gem]] = int(amount)
@@ -219,13 +271,14 @@ class BuyCardSpace(spaces.Dict):
   @classmethod
   def _decode(cls, data: "BuyDict", owner: "ActionSpace") -> BuyCardAction:
     flat = int(data['card_idx'])
-    idx = owner._unflatten_card_idx(flat)
+    idx = owner.config.unflatten_card_idx(flat)
     pay_vec = data['payment']
     payment = {GemList[i]: int(pay_vec[i]) for i in range(len(pay_vec)) if int(pay_vec[i]) > 0}
     return BuyCardAction.create(idx, None, payment=payment)
 
 class ReserveCardSpace(spaces.Dict):
-  def __init__(self, config: GameConfig, *, seed = None, **spaces_kwargs):
+  def __init__(self, config: ActionSpaceConfig, *, seed = None, **spaces_kwargs):
+    self.config = config
     super().__init__({
       'card_idx': spaces.Discrete(config.card_visible_total_count + config.card_max_count_reserved + config.card_level_count),
       'take_gold': spaces.Discrete(2),
@@ -237,7 +290,7 @@ class ReserveCardSpace(spaces.Dict):
     reserve = data
     reserve['card_idx'][...] = 0
     if action.idx is not None:
-      reserve['card_idx'][...] = owner._flatten_card_idx(action.idx)
+      reserve['card_idx'][...] = owner.config.flatten_card_idx(action.idx)
     reserve['take_gold'][...] = int(bool(action.take_gold))
     reserve['ret'][...] = 0
     if action.ret is not None:
@@ -246,7 +299,7 @@ class ReserveCardSpace(spaces.Dict):
   @classmethod
   def _decode(cls, data: "ReserveDict", owner: "ActionSpace") -> ReserveCardAction:
     flat = int(data['card_idx'])
-    idx = owner._unflatten_card_idx(flat)
+    idx = owner.config.unflatten_card_idx(flat)
     take_gold = bool(int(data['take_gold']))
     _ret = ActionSpace._decode_ret_gems(data['ret'])
     ret = None
@@ -264,6 +317,7 @@ class ActionSpace(spaces.Dict):
   """
 
   def __init__(self, config: GameConfig, *, seed = None):
+    self.config = ActionSpaceConfig(config)
     self._type_order = tuple(ActionType)
     self._type_index = {atype: idx for idx, atype in enumerate(self._type_order)}
     # max index space for cards = visible cards + reserved capacity (3) + deck head levels
@@ -276,12 +330,17 @@ class ActionSpace(spaces.Dict):
     self._deck_levels = config.card_level_count
     self._max_card_index = self._visible_count + self._reserve_count + self._deck_levels
     self._gem_count = config.gem_count
+
+    self._take2_space = Take2Space(self.config, seed=seed)
+    self._take3_space = Take3Space(self.config, seed=seed)
+    self._buy_space = BuyCardSpace(self.config, seed=seed)
+    self._reserve_space = ReserveCardSpace(self.config, seed=seed)
     super().__init__({
       'type': spaces.Discrete(len(self._type_order)),
-      'take3': Take3Space(config, seed=seed),
-      'take2': Take2Space(config, seed=seed),
-      'buy': BuyCardSpace(config, seed=seed),
-      'reserve': ReserveCardSpace(config, seed=seed),
+      'take3': self._take3_space,
+      'take2': self._take2_space,
+      'buy': self._buy_space,
+      'reserve': self._reserve_space,
     }, seed=seed)
 
   def empty(self) -> "ActionDict":
@@ -314,56 +373,23 @@ class ActionSpace(spaces.Dict):
     data = self.empty()
     data['type'][...] = self._type_index[action.type]
     if isinstance(action, Take3Action):
-      Take3Space._encode(data["take3"], action)
+      self._take3_space._encode(data["take3"], action)
       return data
     if isinstance(action, Take2Action):
-      Take2Space._encode(data['take2'], action)
+      self._take2_space._encode(data['take2'], action)
       return data
     if isinstance(action, BuyCardAction):
-      BuyCardSpace._encode(data['buy'], action, self)
+      self._buy_space._encode(data['buy'], action, self)
       return data
     if isinstance(action, ReserveCardAction):
-      ReserveCardSpace._encode(data['reserve'], action, self)
+      self._reserve_space._encode(data['reserve'], action, self)
       return data
     if action.type == ActionType.NOOP:
       return data
     raise ValueError(f"Unsupported action type: {action.type}")
 
-  def _flatten_card_idx(self, idx: CardIdx) -> int:
-    if idx.visible_idx is not None:
-      return int(idx.visible_idx)
-    elif idx.reserve_idx is not None:
-      return int(self._visible_count + int(idx.reserve_idx))
-    elif idx.deck_head_level is not None:
-      level = int(idx.deck_head_level) - 1
-      return int(self._visible_count + self._reserve_count + level)
-    return -1
-
   def encode_many(self, actions: Sequence[Action]) -> list["ActionDict"]:
     return [self.encode(action) for action in actions]
-
-  def _unflatten_card_idx(self, flat: int) -> CardIdx | None:
-    """Inverse of _flatten_card_idx: turn integer index back into CardIdx.
-
-    Returns None only if `flat` is negative. Note: callers may pass 0
-    which is a valid visible index (0) so treat 0 normally.
-    """
-    if flat is None:
-      return None
-    try:
-      idx = int(flat)
-    except Exception:
-      return None
-    if idx < 0:
-      return None
-    if idx < self._visible_count:
-      return CardIdx(visible_idx=idx)
-    if idx < self._visible_count + self._reserve_count:
-      return CardIdx(reserve_idx=idx - self._visible_count)
-    if idx < self._visible_count + self._reserve_count + self._deck_levels:
-      level = (idx - self._visible_count - self._reserve_count) + 1
-      return CardIdx(deck_head_level=level)
-    return None
 
   def decode(self, data: "ActionDict") -> Action:
     """Decode a structured ActionDict (as produced by `encode`) back into an Action object.
@@ -378,13 +404,13 @@ class ActionSpace(spaces.Dict):
     atype = self._type_order[tval]
 
     if atype == ActionType.TAKE_3_DIFFERENT:
-      return Take3Space._decode(data['take3'])
+      return self._take3_space._decode(data['take3'])
     if atype == ActionType.TAKE_2_SAME:
-      return Take2Space._decode(data['take2'])
+      return self._take2_space._decode(data['take2'])
     if atype == ActionType.BUY_CARD:
-      return BuyCardSpace._decode(data['buy'], self)
+      return self._buy_space._decode(data['buy'], self)
     if atype == ActionType.RESERVE_CARD:
-      return ReserveCardSpace._decode(data['reserve'], self)
+      return self._reserve_space._decode(data['reserve'], self)
     if atype == ActionType.NOOP:
       return Action.noop()
     raise ValueError(f"Unsupported action type for decode: {atype}")

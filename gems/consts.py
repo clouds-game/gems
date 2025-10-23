@@ -31,6 +31,9 @@ class GameConfig:
   card_max_count_reserved: int = 3
   gem_count: int = 6  # Including gold
 
+  take3_count: int = 3
+  take2_count: int = 2
+
   def __post_init__(self):
     # pydantic already ran basic type validation; now apply domain rules.
     num_players = self.num_players
