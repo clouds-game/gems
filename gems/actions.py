@@ -630,21 +630,22 @@ class ReserveCardAction(Action):
 
     # locate card according to idx; default to searching visible_cards if idx not provided
     found = None
-    if self.idx is None or self.idx.visible_idx is not None:
-      # find by visible id or by scanning
-      if self.idx is not None and self.idx.visible_idx is not None:
-        vi = int(self.idx.visible_idx)
-        if vi < 0 or vi >= len(visible_cards):
-          raise ValueError("visible_idx out of range")
+    # find by visible id or by scanning
+    if self.idx is not None:
+      if self.idx.visible_idx is not None:
+        vi = self.idx.visible_idx
         found = visible_cards.pop(vi)
       else:
-        # fallback: scan visible_cards for matching id
-        for i, c in enumerate(visible_cards):
-          if self.card is not None and c.id == self.card.id:
-            found = visible_cards.pop(i)
-            break
-        if found is None:
-          raise ValueError("Card to reserve not found in visible cards")
+        # deck_head_level/reserve_idx not supported for reserve.apply
+        raise ValueError("ReserveCardAction requires a visible_idx in apply")
+    elif self.card is not None:
+      # fallback: scan visible_cards for matching id
+      for i, c in enumerate(visible_cards):
+        if self.card is not None and c.id == self.card.id:
+          found = visible_cards.pop(i)
+          break
+      if found is None:
+        raise ValueError("Card to reserve not found in visible cards")
     else:
       # reserve by idx.reserve_idx not supported for reserve.apply
       raise ValueError("ReserveCardAction requires a visible_idx or card in apply")
@@ -672,26 +673,23 @@ class ReserveCardAction(Action):
     if not player.can_reserve(config):
       return False
     # ensure card is visible
-    if self.idx is not None and self.idx.visible_idx is not None:
-      try:
-        c = state.visible_cards[self.idx.visible_idx]
-      except Exception:
-        return False
-      if self.card is not None and c.id != self.card.id:
-        return False
-    else:
-      if self.card is None:
-        return False
-      if state.visible_cards.get(self.card.id) is None:
+    if self.idx is not None:
+      if self.idx.visible_idx is not None:
+        try:
+          c = state.visible_cards[self.idx.visible_idx]
+        except Exception:
+          return False
+        if self.card is not None and c.id != self.card.id:
+          return False
+    elif self.card is not None:
+      if state.visible_cards.find(self.card.id) is None:
         return False
     if self.take_gold and state.bank.get(Gem.GOLD) <= 0:
       return False
 
+    if self.ret == Gem.GOLD:
+      return False
     if self.ret:
-      if not self.take_gold:
-        return False
-      if self.ret == Gem.GOLD:
-        return False
       if player.gems.get(self.ret) <= 0:
         return False
 
@@ -702,7 +700,15 @@ class ReserveCardAction(Action):
     return True
 
   def _check_without_state(self, config: GameConfig) -> bool:
-    # No config-only checks for ReserveCardAction; reservation limits are per-player/state
+    # could only return a gem if taking gold
+    if self.ret is not None and not self.take_gold:
+      return False
+    # self.idx must specify visible_idx (deck_head_level/reserve_idx not supported)
+    if self.idx is not None:
+      if self.idx.visible_idx is None and self.idx.deck_head_level is None:
+        return False
+    elif self.card is None:
+      return False
     return True
 
   @classmethod

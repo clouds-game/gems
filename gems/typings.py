@@ -216,7 +216,7 @@ class CardList:
     """Return a new CardList containing only cards with the given level."""
     return CardList([c for c in self._items if c.level == level])
 
-  def get(self, card_id: str) -> Card | None:
+  def find(self, card_id: str) -> Card | None:
     """Return the Card with the given ID, or None if not found."""
     for c in self._items:
       if c.id == card_id:

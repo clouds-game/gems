@@ -126,8 +126,8 @@ class ActionSpaceConfig(GameConfig):
 
 
 class Take3Space(spaces.Dict):
-  def __init__(self, config: ActionSpaceConfig, *, seed = None, **spaces_kwargs):
-    self.config = config
+  def __init__(self, config: ActionSpaceConfig | GameConfig, *, seed = None, **spaces_kwargs):
+    self.config = config if isinstance(config, ActionSpaceConfig) else ActionSpaceConfig(config)
     self._gems = spaces.Box(low=0, high=1, shape=(config.gem_count,), dtype=np.int8)
     self._ret = spaces.Box(low=0, high=config.coin_max_count_per_player, shape=(config.gem_count,), dtype=np.int8)
     super().__init__({
@@ -197,8 +197,8 @@ class Take3Space(spaces.Dict):
     return self._sample(mask=mask, probability=probability) # type: ignore[TypedDict]
 
 class Take2Space(spaces.Dict):
-  def __init__(self, config: ActionSpaceConfig, *, seed = None, **spaces_kwargs):
-    self.config = config
+  def __init__(self, config: ActionSpaceConfig | GameConfig, *, seed = None, **spaces_kwargs):
+    self.config = config if isinstance(config, ActionSpaceConfig) else ActionSpaceConfig(config)
     super().__init__({
       'gem': spaces.Discrete(config.gem_count),
       'count': spaces.Discrete(3),
@@ -265,8 +265,8 @@ class Take2Space(spaces.Dict):
     return self._sample(mask=mask, probability=probability) # type: ignore[TypedDict]
 
 class BuyCardSpace(spaces.Dict):
-  def __init__(self, config: ActionSpaceConfig, *, seed = None, **spaces_kwargs):
-    self.config = config
+  def __init__(self, config: ActionSpaceConfig | GameConfig, *, seed = None, **spaces_kwargs):
+    self.config = config if isinstance(config, ActionSpaceConfig) else ActionSpaceConfig(config)
     super().__init__({
       'card_idx': spaces.Discrete(config.card_visible_total_count + config.card_max_count_reserved + config.card_level_count),
       'payment': spaces.Box(low=0, high=255, shape=(config.gem_count,), dtype=np.int32),
@@ -289,8 +289,8 @@ class BuyCardSpace(spaces.Dict):
     return BuyCardAction.create(idx, None, payment=payment)
 
 class ReserveCardSpace(spaces.Dict):
-  def __init__(self, config: ActionSpaceConfig, *, seed = None, **spaces_kwargs):
-    self.config = config
+  def __init__(self, config: ActionSpaceConfig | GameConfig, *, seed = None, **spaces_kwargs):
+    self.config = config if isinstance(config, ActionSpaceConfig) else ActionSpaceConfig(config)
     super().__init__({
       'card_idx': spaces.Discrete(config.card_visible_total_count + config.card_max_count_reserved + config.card_level_count),
       'take_gold': spaces.Discrete(2),
