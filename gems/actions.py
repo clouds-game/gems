@@ -212,23 +212,34 @@ class Take3Action(Action):
 
   def _check_with_state(self, player: PlayerState, state: GameState, config: GameConfig) -> bool:
     # Ensure each gem to take is available in bank
-    bank = {g: amt for g, amt in state.bank}
     for g in self.gems:
-      if bank.get(g, 0) <= 0:
+      if state.bank.get(g) <= 0:
         return False
 
     # If returns provided, ensure player would have enough tokens after taking to return
     # Compute player's gems after taking
-    player_gems = {g: n for g, n in player.gems}
     if self.ret:
       for g, amt in self.ret:
-        if player_gems.get(g, 0) < amt:
+        if player.gems.get(g) < amt:
           return False
 
     # check final total does not exceed 10
-    total_after = sum(player_gems.values()) + len(self.gems) - \
-        (sum(n for _, n in self.ret) if self.ret else 0)
+    total_after = player.gems.count() + len(self.gems) - \
+        (self.ret.count() if self.ret else 0)
     if total_after > config.coin_max_count_per_player:
+      return False
+    return True
+
+  def _check_without_state(self, config: GameConfig) -> bool:
+    # stateless validation: ensure action parameters are sane before checking state
+    # must not request more than 3 gems
+    if len(self.gems) > 3:
+      return False
+    # gems must be distinct
+    if len(set(self.gems)) != len(self.gems):
+      return False
+    # none of the gems may be gold (gold cannot be taken as part of take-3)
+    if any(g == Gem.GOLD for g in self.gems):
       return False
     return True
 
@@ -338,8 +349,7 @@ class Take2Action(Action):
                      last_action=self)
 
   def _check_with_state(self, player: PlayerState, state: GameState, config: GameConfig) -> bool:
-    if self.gem == Gem.GOLD:
-      return False
+    # stateful checks that require bank/player info
     if state.bank.get(self.gem) < config.coin_min_count_take2_in_deck:
       return False
 
@@ -352,6 +362,12 @@ class Take2Action(Action):
 
     total_after = sum(player_gems.values()) + self.count - (self.ret.count() if self.ret else 0)
     if total_after > config.coin_max_count_per_player:
+      return False
+    return True
+
+  def _check_without_state(self, config: GameConfig) -> bool:
+    # Can't take two gold tokens - purely a rule independent of player/state
+    if self.gem == Gem.GOLD:
       return False
     return True
 
@@ -518,6 +534,10 @@ class BuyCardAction(Action):
     # deck_head_level can't be checked here
     return False
 
+  def _check_without_state(self, config: GameConfig) -> bool:
+    # No config-only checks for BuyCardAction (payments validated with player/state)
+    return True
+
   @classmethod
   def _get_legal_actions(cls, player: PlayerState, state: GameState, config: GameConfig) -> list["BuyCardAction"]:
     # For each visible or reserved card, enumerate all exact payment dicts the player can afford.
@@ -671,6 +691,10 @@ class ReserveCardAction(Action):
 
     return True
 
+  def _check_without_state(self, config: GameConfig) -> bool:
+    # No config-only checks for ReserveCardAction; reservation limits are per-player/state
+    return True
+
   @classmethod
   def _get_legal_actions(cls, player: PlayerState, state: GameState, config: GameConfig) -> list["ReserveCardAction"]:
     actions: list[ReserveCardAction] = []
@@ -723,6 +747,9 @@ class NoopAction(Action):
                      last_action=self)
 
   def _check_with_state(self, player: PlayerState, state: GameState, config: GameConfig) -> bool:
+    return True
+
+  def _check_without_state(self, config: GameConfig) -> bool:
     return True
 
   @classmethod
