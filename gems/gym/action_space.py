@@ -70,20 +70,24 @@ class ActionSpaceConfig(GameConfig):
     """Flatten a CardIdx into an integer index using this config.
 
     Layout (flattened index):
-    - 0..(visible-1) => visible_idx
-    - visible..(visible+reserved-1) => reserve_idx (offset by visible)
-    - visible+reserved.. => deck_head_level (offset by visible+reserved), one entry per level
+    - 0..(reserve-1) => reserve_idx
+    - reserve..(reserve+visible-1) => visible_idx (offset by reserve)
+    - reserve+visible.. => deck_head_level (offset by reserve+visible), one entry per level
+
+    More concretely this uses the config attributes:
+    - reserve indices are 0..(card_max_count_reserved-1)
+    - visible indices are offset by card_max_count_reserved
+    - deck head levels are offset by card_max_count_reserved + card_visible_total_count
+
     Returns -1 when idx is None or no field is set.
     """
-    if idx is None:
-      return -1
-    if idx.visible_idx is not None:
-      return int(idx.visible_idx)
     if idx.reserve_idx is not None:
-      return int(self.card_visible_total_count + int(idx.reserve_idx))
+      return idx.reserve_idx
+    if idx.visible_idx is not None:
+      return self.card_max_count_reserved + idx.visible_idx
     if idx.deck_head_level is not None:
-      level = int(idx.deck_head_level) - 1
-      return int(self.card_visible_total_count + self.card_max_count_reserved + level)
+      level = idx.deck_head_level - 1
+      return self.card_visible_total_count + self.card_max_count_reserved + level
     return -1
 
   def unflatten_card_idx(self, flat: int) -> CardIdx | None:
@@ -92,22 +96,34 @@ class ActionSpaceConfig(GameConfig):
     Returns None only if `flat` is negative. Note: callers may pass 0
     which is a valid visible index (0) so treat 0 normally.
     """
-    if flat is None:
-      return None
     try:
       idx = int(flat)
     except Exception:
       return None
     if idx < 0:
       return None
-    if idx < self.card_visible_total_count:
-      return CardIdx(visible_idx=idx)
+    if idx < self.card_max_count_reserved:
+      return CardIdx(reserve_idx=idx)
     if idx < self.card_visible_total_count + self.card_max_count_reserved:
-      return CardIdx(reserve_idx=idx - self.card_visible_total_count)
+      return CardIdx(visible_idx=idx - self.card_max_count_reserved)
     if idx < self.card_visible_total_count + self.card_max_count_reserved + self.card_level_count:
       level = (idx - self.card_visible_total_count - self.card_max_count_reserved) + 1
       return CardIdx(deck_head_level=level)
     return None
+
+  def decode_ret_gems(self, vec) -> dict[Gem, int] | None:
+    """Convert a return-vector (iterable of ints) into a Gem->int dict or None.
+
+    Assumes input is valid (iterable with self._gem_count entries). Returns None
+    when no gems are returned (all zeros).
+    """
+    if vec is None:
+      return None
+    total = sum(int(x) for x in vec)
+    if total == 0:
+      return None
+    return {self.gem_list[i]: int(vec[i]) for i in range(len(vec)) if int(vec[i]) > 0}
+
 
 class Take3Space(spaces.Dict):
   def __init__(self, config: ActionSpaceConfig, *, seed = None, **spaces_kwargs):
@@ -138,7 +154,7 @@ class Take3Space(spaces.Dict):
     gems_vec = data['gems']
     gems = tuple(gem for gem, v in zip(GemList, gems_vec) if int(v) != 0)
     ret_vec = data['ret']
-    ret = ActionSpace._decode_ret_gems(ret_vec)
+    ret = self.config.decode_ret_gems(ret_vec)
     return Take3Action.create(*gems, ret_map=ret)
 
   def _sample(self, mask: Take3Dict[np.bool] | None = None, probability: Take3Dict[np.floating] | None = None) -> Take3Dict:
@@ -190,8 +206,7 @@ class Take2Space(spaces.Dict):
       'ret': spaces.Box(low=0, high=config.coin_max_count_per_player, shape=(config.gem_count,), dtype=np.int8),
     }, seed, **spaces_kwargs)
 
-  @classmethod
-  def _encode(cls, data: "Take2Dict", action: Take2Action):
+  def _encode(self, data: "Take2Dict", action: Take2Action):
     take2 = data
     take2['gem'][...] = GemIndex[action.gem]
     take2['count'][...] = int(action.count)
@@ -200,12 +215,11 @@ class Take2Space(spaces.Dict):
     for gem_ret, amount in action.ret or ():
       take2['ret'][GemIndex[gem_ret]] = int(amount)
 
-  @classmethod
-  def _decode(cls, data: "Take2Dict") -> Take2Action:
+  def _decode(self, data: "Take2Dict") -> Take2Action:
     gem_idx = data['gem']
     gem = GemList[int(gem_idx)]
     count = int(data['count'])
-    ret = ActionSpace._decode_ret_gems(data['ret'])
+    ret = self.config.decode_ret_gems(data['ret'])
     return Take2Action.create(gem, count, ret_map=ret)
 
   def _sample(self, mask: Take2Dict[np.bool] | None = None, probability: Take2Dict[np.floating] | None = None) -> Take2Dict:
@@ -258,20 +272,18 @@ class BuyCardSpace(spaces.Dict):
       'payment': spaces.Box(low=0, high=255, shape=(config.gem_count,), dtype=np.int32),
     }, seed, **spaces_kwargs)
 
-  @classmethod
-  def _encode(cls, data: "BuyDict", action: BuyCardAction, owner: "ActionSpace"):
+  def _encode(self, data: "BuyDict", action: BuyCardAction):
     buy = data
     buy['card_idx'][...] = 0
     if action.idx is not None:
-      buy['card_idx'][...] = owner.config.flatten_card_idx(action.idx)
+      buy['card_idx'][...] = self.config.flatten_card_idx(action.idx)
     buy['payment'][...] = 0
     for gem, amount in action.payment or ():
       buy['payment'][GemIndex[gem]] = int(amount)
 
-  @classmethod
-  def _decode(cls, data: "BuyDict", owner: "ActionSpace") -> BuyCardAction:
+  def _decode(self, data: "BuyDict") -> BuyCardAction:
     flat = int(data['card_idx'])
-    idx = owner.config.unflatten_card_idx(flat)
+    idx = self.config.unflatten_card_idx(flat)
     pay_vec = data['payment']
     payment = {GemList[i]: int(pay_vec[i]) for i in range(len(pay_vec)) if int(pay_vec[i]) > 0}
     return BuyCardAction.create(idx, None, payment=payment)
@@ -285,23 +297,21 @@ class ReserveCardSpace(spaces.Dict):
       'ret': spaces.Box(low=0, high=1, shape=(config.gem_count,), dtype=np.int8),
     }, seed, **spaces_kwargs)
 
-  @classmethod
-  def _encode(cls, data: "ReserveDict", action: ReserveCardAction, owner: "ActionSpace"):
+  def _encode(self, data: "ReserveDict", action: ReserveCardAction):
     reserve = data
     reserve['card_idx'][...] = 0
     if action.idx is not None:
-      reserve['card_idx'][...] = owner.config.flatten_card_idx(action.idx)
+      reserve['card_idx'][...] = self.config.flatten_card_idx(action.idx)
     reserve['take_gold'][...] = int(bool(action.take_gold))
     reserve['ret'][...] = 0
     if action.ret is not None:
       reserve['ret'][GemIndex[action.ret]] = 1
 
-  @classmethod
-  def _decode(cls, data: "ReserveDict", owner: "ActionSpace") -> ReserveCardAction:
+  def _decode(self, data: "ReserveDict") -> ReserveCardAction:
     flat = int(data['card_idx'])
-    idx = owner.config.unflatten_card_idx(flat)
+    idx = self.config.unflatten_card_idx(flat)
     take_gold = bool(int(data['take_gold']))
-    _ret = ActionSpace._decode_ret_gems(data['ret'])
+    _ret = self.config.decode_ret_gems(data['ret'])
     ret = None
     for g in _ret or ():
       ret = g
@@ -379,10 +389,10 @@ class ActionSpace(spaces.Dict):
       self._take2_space._encode(data['take2'], action)
       return data
     if isinstance(action, BuyCardAction):
-      self._buy_space._encode(data['buy'], action, self)
+      self._buy_space._encode(data['buy'], action)
       return data
     if isinstance(action, ReserveCardAction):
-      self._reserve_space._encode(data['reserve'], action, self)
+      self._reserve_space._encode(data['reserve'], action)
       return data
     if action.type == ActionType.NOOP:
       return data
@@ -408,26 +418,12 @@ class ActionSpace(spaces.Dict):
     if atype == ActionType.TAKE_2_SAME:
       return self._take2_space._decode(data['take2'])
     if atype == ActionType.BUY_CARD:
-      return self._buy_space._decode(data['buy'], self)
+      return self._buy_space._decode(data['buy'])
     if atype == ActionType.RESERVE_CARD:
-      return self._reserve_space._decode(data['reserve'], self)
+      return self._reserve_space._decode(data['reserve'])
     if atype == ActionType.NOOP:
       return Action.noop()
     raise ValueError(f"Unsupported action type for decode: {atype}")
-
-  @staticmethod
-  def _decode_ret_gems(vec) -> dict[Gem, int] | None:
-    """Convert a return-vector (iterable of ints) into a Gem->int dict or None.
-
-    Assumes input is valid (iterable with self._gem_count entries). Returns None
-    when no gems are returned (all zeros).
-    """
-    if vec is None:
-      return None
-    total = sum(int(x) for x in vec)
-    if total == 0:
-      return None
-    return {GemList[i]: int(vec[i]) for i in range(len(vec)) if int(vec[i]) > 0}
 
   def decode_many(self, actions: Sequence["ActionDict"]) -> list[Action]:
     return [self.decode(a) for a in actions]
