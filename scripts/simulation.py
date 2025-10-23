@@ -58,4 +58,15 @@ def display_actions():
     for action in actions:
       print(f"  {action}")
     state.print_summary()
+
+
 # %%
+import _common
+from gems.agents.target import TargetAgent
+from gems.engine import Engine
+
+agents = [TargetAgent(seat_id=0, debug=True)]
+engine = Engine.new(num_players=1, seed=42)
+while not engine.game_end():
+  engine.play_one_round(agents=agents)
+  print("===" * 20)

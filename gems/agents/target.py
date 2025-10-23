@@ -1,4 +1,5 @@
 from collections.abc import Sequence
+from random import Random
 from gems.typings import Card, Gem, GemList
 
 from .core import Agent
@@ -56,12 +57,19 @@ def quick_score(state: GameState, seat_id: int, target_card: Card | None, action
 
 class TargetAgent(Agent):
   target_card: Card | None = None
+  debug: bool = False
+
+  def __init__(self, seat_id: int, rng: Random | None = None, debug: bool = False):
+    super().__init__(seat_id, rng)
+    self.debug = debug
 
   def act(self, state: GameState, legal_actions: Sequence[Action], *, timeout: float | None = None) -> Action:
 
     if not legal_actions:
       raise ValueError("No legal actions available")
     self.update(state)
+    if self.debug:
+      print(f"[TargetAgent] seat_id={self.seat_id} target_card={self.target_card}")
 
     action_score = [
         (a, quick_score(state, self.seat_id, self.target_card, a)) for a in legal_actions
