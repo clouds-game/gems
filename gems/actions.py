@@ -121,8 +121,30 @@ class Action(ABC):
     caller/engine.
     """
 
-  @abstractmethod
   def _check(self, player: PlayerState, state: GameState, config: GameConfig) -> bool:
+    """Backward-compatible check wrapper: combine stateless and stateful checks.
+
+    New split API:
+    - _check_without_state(config) -> bool: checks that only depend on config
+      (or other global rules) and do not require player/state.
+    - _check_with_state(player, state, config) -> bool: checks that require
+      access to the current player and full game state.
+
+    For now, we keep this helper to preserve existing behaviour: both parts
+    must return True for the action to be considered valid.
+    """
+    return self._check_without_state(config) and self._check_with_state(player, state, config)
+
+  def _check_without_state(self, config: GameConfig) -> bool:
+    """Return True if this action is allowed based only on global config/state.
+
+    Subclasses may override this if there are checks that don't require the
+    current player or full GameState. Default implementation allows the action.
+    """
+    return True
+
+  @abstractmethod
+  def _check_with_state(self, player: PlayerState, state: GameState, config: GameConfig) -> bool:
     """Return True if this action could be applied for `player` in `state`.
     Implementations should perform non-mutating validation equivalent to
     what `apply` would enforce.
@@ -188,7 +210,7 @@ class Take3Action(Action):
                      visible_cards=state.visible_cards, turn=state.turn,
                      last_action=self)
 
-  def _check(self, player: PlayerState, state: GameState, config: GameConfig) -> bool:
+  def _check_with_state(self, player: PlayerState, state: GameState, config: GameConfig) -> bool:
     # Ensure each gem to take is available in bank
     bank = {g: amt for g, amt in state.bank}
     for g in self.gems:
@@ -315,7 +337,7 @@ class Take2Action(Action):
                      visible_cards=state.visible_cards, turn=state.turn,
                      last_action=self)
 
-  def _check(self, player: PlayerState, state: GameState, config: GameConfig) -> bool:
+  def _check_with_state(self, player: PlayerState, state: GameState, config: GameConfig) -> bool:
     if self.gem == Gem.GOLD:
       return False
     if state.bank.get(self.gem) < config.coin_min_count_take2_in_deck:
@@ -471,7 +493,7 @@ class BuyCardAction(Action):
                      visible_cards_in=visible_cards, turn=state.turn,
                      last_action=self)
 
-  def _check(self, player: PlayerState, state: GameState, config: GameConfig) -> bool:
+  def _check_with_state(self, player: PlayerState, state: GameState, config: GameConfig) -> bool:
     # require idx to be set and match
     if self.idx is None:
       return False
@@ -616,7 +638,7 @@ class ReserveCardAction(Action):
                      visible_cards_in=visible_cards, turn=state.turn,
                      last_action=self)
 
-  def _check(self, player: PlayerState, state: GameState, config: GameConfig) -> bool:
+  def _check_with_state(self, player: PlayerState, state: GameState, config: GameConfig) -> bool:
     if not player.can_reserve(config):
       return False
     # ensure card is visible
@@ -700,7 +722,7 @@ class NoopAction(Action):
                      visible_cards=state.visible_cards, turn=state.turn,
                      last_action=self)
 
-  def _check(self, player: PlayerState, state: GameState, config: GameConfig) -> bool:
+  def _check_with_state(self, player: PlayerState, state: GameState, config: GameConfig) -> bool:
     return True
 
   @classmethod
