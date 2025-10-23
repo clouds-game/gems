@@ -37,5 +37,22 @@ class Agent:
     """
     raise NotImplementedError()
 
+  def metadata(self) -> dict[str, str]:
+    """Return optional metadata about the agent's internal state.
+
+    This is recorded during simulations for later analysis.
+    Default implementation returns an empty dict. Subclasses may override.
+    """
+    return {}
+
+  @classmethod
+  def metadata_str(cls, data: dict[str, str]) -> str:
+    type_name = data.get("type", "Agent")
+    seat_id = data.get("seat_id", "unknown")
+    data_str = " ".join(f"{key}={value}" for key, value in data.items()
+                        if key not in {"type", "seat_id"})
+    return f"[{type_name}] seat_id={seat_id} {data_str}"
+
+
 BaseAgent = TypeVar('BaseAgent', bound=Agent)
 __all__ = ["Agent", "BaseAgent"]

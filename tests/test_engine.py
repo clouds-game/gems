@@ -30,12 +30,16 @@ def test_serialize_deserialize_replay_roundtrip():
 
   e1 = Engine.new(2, ["P1", "P2"], seed=123)
   # pick a deterministic simple action: take 3 different gems
-  act = Action.take3(Gem.RED, Gem.BLUE, Gem.WHITE)
+  act1 = Action.take3(Gem.RED, Gem.BLUE, Gem.WHITE)
+  act2 = Action.take2(Gem.RED)
   # apply action and record it as engine would
-  s0 = e1.get_state()
-  e1._state = act.apply(s0)
+  e1._state = act1.apply(e1.get_state())
   e1.advance_turn()
-  e1._action_history.append(act)
+  e1._state = act2.apply(e1.get_state())
+  e1.advance_turn()
+
+  e1._action_history.append(act1)
+  e1._action_history.append(act2)
 
   data = e1.serialize()
   # ensure config field present and contains expected num_players
@@ -44,10 +48,10 @@ def test_serialize_deserialize_replay_roundtrip():
   e2 = Engine.deserialize(data)
   # after deserialize the actions should be staged for replay
   assert hasattr(e2, '_actions_to_replay')
-  assert len(e2._actions_to_replay) == 1
+  assert len(e2._actions_to_replay) == 2
   # now apply replay and ensure states and histories match
   states = e2.replay()  # replay pending action(s)
-  # should return initial + one new state
+  # should return initial + one new state after one round of actions
   assert len(states) == 2
   assert states[-1] == e1.get_state()
   assert e2.get_state() == e1.get_state()

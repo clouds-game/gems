@@ -1,5 +1,6 @@
 # %%
 from simulation_utils import get_simulation_config, load_engines, play_and_save, load_and_replay, Simulation_Dir, plot_scores, EXTRACTORS
+from gems.agents.core import Agent
 
 
 def run():
@@ -47,13 +48,21 @@ def display_actions():
 
   states = engine.replay()
   action_history = engine._action_history
+  agent_metadata = engine._metadata.agent_metadata
   num_players = engine.config.num_players
   actions_list = [action_history[i:i + num_players]
                   for i in range(0, len(action_history), num_players)]
+  agent_metadata_list = [agent_metadata[i:i + num_players]
+                         for i in range(0, len(agent_metadata), num_players)]
+
   assert len(states) == len(actions_list) + 1
   states[0].print_summary()
-  for state, actions in zip(states[1:], actions_list):
-    print("--" * 20)
+  for state, actions, metadata in zip(states[1:], actions_list, agent_metadata_list):
+    print("==" * 20)
+    print("Agent Metadata:")
+    for meta in metadata:
+      if meta:
+        print(f"  {Agent.metadata_str(meta)}")
     print(f"Actions:")
     for action in actions:
       print(f"  {action}")
@@ -61,12 +70,12 @@ def display_actions():
 
 
 # %%
-import _common
-from gems.agents.target import TargetAgent
-from gems.engine import Engine
+# import _common
+# from gems.agents.target import TargetAgent
+# from gems.engine import Engine
 
-agents = [TargetAgent(seat_id=0, debug=True)]
-engine = Engine.new(num_players=1, seed=42)
-while not engine.game_end():
-  engine.play_one_round(agents=agents)
-  print("===" * 20)
+# agents = [TargetAgent(seat_id=0, debug=True)]
+# engine = Engine.new(num_players=1, seed=42)
+# while not engine.game_end():
+#   engine.play_one_round(agents=agents)
+#   print("===" * 20)

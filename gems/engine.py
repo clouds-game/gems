@@ -14,11 +14,12 @@ from collections.abc import Sequence
 from .agents.core import Agent, BaseAgent
 from .consts import GameConfig
 
-from .typings import ActionType, Gem, Card, Role
+from .typings import ActionType, EngineMetadata, Gem, Card, Role
 from .state import PlayerState, GameState
 from .actions import Action
 from pathlib import Path
 import random
+
 
 
 class Engine:
@@ -41,6 +42,7 @@ class Engine:
   _rng: random.Random
   _action_history: list[Action]
   _actions_to_replay: list[Action]
+  _metadata: EngineMetadata
   def __init__(
       self,
       *,
@@ -69,6 +71,7 @@ class Engine:
     self._all_noops_last_round = all_noops_last_round
     self._action_history = list(action_history) if action_history is not None else []
     self._actions_to_replay = []
+    self._metadata = EngineMetadata()
 
   @staticmethod
   def new(
@@ -108,6 +111,7 @@ class Engine:
                               turn=engine._state.turn)
     engine._all_noops_last_round = False
     engine._action_history = []
+    engine._metadata = EngineMetadata()
     return engine
 
   def clone(self, seed: int | None = None) -> "Engine":
@@ -139,6 +143,7 @@ class Engine:
       'names': self._names,
       'seed': self._seed,
       'action_history': [a.serialize() for a in self._action_history],
+      'metadata': self._metadata.serialize(),
     }
 
   @classmethod
@@ -170,6 +175,8 @@ class Engine:
       actions.append(Action.deserialize(a))
     # store as actions needing replay; caller may choose to call apply_replay()
     engine._actions_to_replay = actions
+    raw_metadata = d.get('metadata', {})
+    engine._metadata = EngineMetadata.deserialize(raw_metadata)
     return engine
 
   def replay(self, actions: Sequence[Action] | None = None) -> list[GameState]:
@@ -190,7 +197,7 @@ class Engine:
         cleared after successful application.
 
     Returns:
-      list[GameState]: `[state_before, state_after_action1, ...]`.
+      list[GameState]: `[state_before, state_after_actions_of_round_1, ...]`.
 
     Raises:
       ValueError: if any action cannot be applied to the current state.
@@ -379,7 +386,7 @@ class Engine:
       # apply action and update engine state
       self._state = action.apply(state)
       self._action_history.append(action)
-      # print a brief summary after the move
+      self._metadata.agent_metadata.append(agent.metadata())
       if debug:
         self.print_summary()
       self.advance_turn()

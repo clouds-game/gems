@@ -107,5 +107,14 @@ class TargetAgent(Agent):
     # Use the agent's RNG for determinism when seeded
     return self.rng.choice(visible)
 
+  def metadata(self) -> dict[str, str]:
+    if self.target_card:
+      return {
+          "type": self.__class__.__name__,
+          "seat_id": str(self.seat_id),
+          "target_card": str(self.target_card),
+      }
+    return {}
+
 
 __all__ = ["TargetAgent", "quick_score"]
