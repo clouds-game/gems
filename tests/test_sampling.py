@@ -86,3 +86,15 @@ def test_sample_take3():
   assert a['ret_count'] == 3
   assert np.all(a['gems'] == [1, 1, 0, 1, 0, 0])
   assert np.all(a['ret'] == [0, 0, 1, 0, 0, 2])
+
+def test_sample_take2():
+  from gems.gym.action_space import Take2Space
+  from gems.consts import GameConfig
+
+  space = Take2Space(GameConfig(), seed=123)
+
+  a = space.sample()
+  assert a['gem'] == 1
+  assert a['count'] == 2
+  assert a['ret_count'] == 0
+  assert np.all(a['ret'] == [0, 0, 0, 0, 0, 0])

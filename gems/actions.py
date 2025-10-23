@@ -370,8 +370,14 @@ class Take2Action(Action):
     return True
 
   def _check_without_state(self, config: GameConfig) -> bool:
-    # Can't take two gold tokens - purely a rule independent of player/state
+    # Can't take two gold tokens
     if self.gem == Gem.GOLD:
+      return False
+    # must take exactly 2
+    if self.count != 2:
+      return False
+    # cannot return gems that are also being taken
+    if any(g == self.gem for g, _ in self.ret or ()):
       return False
     return True
 

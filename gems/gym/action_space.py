@@ -36,6 +36,7 @@ class Take3Dict(TypedDict, Generic[T]):
 class Take2Dict(TypedDict, Generic[T]):
   gem: Scalar[T]
   count: Scalar[T]
+  ret_count: Scalar[T]
   ret: NDArray1D[T]
 
 class BuyDict(TypedDict):
@@ -62,7 +63,7 @@ class Take3Space(spaces.Dict):
     self._ret = spaces.Box(low=0, high=config.coin_max_count_per_player, shape=(config.gem_count,), dtype=np.int8)
     super().__init__({
       'gems_count': spaces.Box(1, 4),
-      'ret_count': spaces.Box(1, 4),
+      'ret_count': spaces.Box(0, 4),
       'gems': self._gems,
       'ret': self._ret,
     }, seed, **spaces_kwargs)
@@ -133,6 +134,7 @@ class Take2Space(spaces.Dict):
     super().__init__({
       'gem': spaces.Discrete(config.gem_count),
       'count': spaces.Discrete(3),
+      'ret_count': spaces.Box(0, 3),
       'ret': spaces.Box(low=0, high=config.coin_max_count_per_player, shape=(config.gem_count,), dtype=np.int8),
     }, seed, **spaces_kwargs)
 
@@ -141,6 +143,7 @@ class Take2Space(spaces.Dict):
     take2 = data
     take2['gem'][...] = GemIndex[action.gem]
     take2['count'][...] = int(action.count)
+    take2['ret_count'][...] = action.ret.count() if action.ret is not None else 0
     take2['ret'][...] = 0
     for gem_ret, amount in action.ret or ():
       take2['ret'][GemIndex[gem_ret]] = int(amount)
@@ -152,6 +155,48 @@ class Take2Space(spaces.Dict):
     count = int(data['count'])
     ret = ActionSpace._decode_ret_gems(data['ret'])
     return Take2Action.create(gem, count, ret_map=ret)
+
+  def _sample(self, mask: Take2Dict[np.bool] | None = None, probability: Take2Dict[np.floating] | None = None) -> Take2Dict:
+    # build masks/weights and ensure GOLD is never selected for Take2
+    gem_mask = None if mask is None else np.asarray(mask['gem'], dtype=bool).copy()
+    gem_p = None if probability is None else probability['gem']
+
+    gold_idx = GemIndex[Gem.GOLD]
+    if gem_mask is None:
+      gem_mask = np.ones(GEM_COUNT, dtype=bool)
+    gem_mask[gold_idx] = False
+
+    # sample a single gem index (as a one-hot/count vector)
+    gem_sampled = sample_exact(GEM_COUNT, 1, dtype=np.int8, mask=gem_mask, p=gem_p, replacement=False, rng=self.np_random)
+    # convert one-hot vector into scalar index; if none chosen keep as 0
+    chosen_idxs = np.flatnonzero(gem_sampled)
+    gem_idx = int(chosen_idxs[0]) if chosen_idxs.size > 0 else 0
+
+    # choose count: 2
+    count = 2
+
+    # ret mask: exclude the taken gem
+    ret_mask = None if mask is None else np.asarray(mask['ret'], dtype=bool).copy()
+    ret_p = None if probability is None else probability['ret']
+    if ret_mask is None:
+      ret_mask_final = np.ones(GEM_COUNT, dtype=bool)
+    else:
+      ret_mask_final = np.asarray(ret_mask, dtype=bool).copy()
+    # cannot return the gem being taken
+    ret_mask_final[gem_idx] = False
+
+    ret_count = int(self.np_random.integers(0, count + 1))
+    ret_sampled = sample_exact(GEM_COUNT, int(ret_count), dtype=np.int8, mask=ret_mask_final, p=ret_p, replacement=True, rng=self.np_random)
+
+    return {
+      'gem': np.array(gem_idx, dtype=np.int8),
+      'count': np.array(count, dtype=np.int8),
+      'ret_count': np.array(ret_count, dtype=np.int8),
+      'ret': ret_sampled,
+    }
+
+  def sample(self, mask = None, probability = None) -> dict[str, Any]:
+    return self._sample(mask=mask, probability=probability) # type: ignore[TypedDict]
 
 class BuyCardSpace(spaces.Dict):
   def __init__(self, config: GameConfig, *, seed = None, **spaces_kwargs):
@@ -250,6 +295,7 @@ class ActionSpace(spaces.Dict):
       'take2': {
         'gem': np.array(0, dtype=np.int8),
         'count': np.array(0, dtype=np.int8),
+        'ret_count': np.array(0, dtype=np.int8),
         'ret': np.zeros(self._gem_count, dtype=np.int8),
       },
       'buy': {

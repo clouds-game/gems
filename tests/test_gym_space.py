@@ -182,3 +182,33 @@ def test_sample_take3_dict():
     assert isinstance(action, Take3Action)
     # must pass stateless checks
     assert action._check_without_state(config)
+
+
+def test_sample_take2_dict():
+  from gems.gym.action_space import Take2Space
+  config = GameConfig()
+  aspace = ActionSpace(config)
+  take2_space = cast(Take2Space, aspace.spaces['take2'])
+
+  from gems.actions import Take2Action
+  for _ in range(1000):
+    d = take2_space._sample()
+    assert set(d.keys()) >= {'gem', 'count', 'ret'}
+    gem_idx = int(d['gem'])
+    count = int(d['count'])
+    ret_arr = np.asarray(d['ret'], dtype=np.int8)
+    # gem must be within range and not GOLD
+    assert 0 <= gem_idx < len(Gem)
+    assert list(Gem)[gem_idx] != Gem.GOLD
+    # count must be 0, 1 or 2
+    assert count in (0, 1, 2)
+    # ret count matches returned array sum and does not include taken gem
+    ret_count = int(ret_arr.sum())
+    assert 0 <= ret_count <= count
+    if ret_count > 0:
+      # ensure taken gem not returned
+      assert int(ret_arr[gem_idx]) == 0
+
+    action = take2_space._decode(d)
+    assert isinstance(action, Take2Action)
+    assert action._check_without_state(config)
