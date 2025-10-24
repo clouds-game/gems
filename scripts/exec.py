@@ -93,12 +93,14 @@ def display_actions():
 
 # %%
 import _common
-from gems.agents.target import TargetAgent
+from gems.agents.target import TargetAgent, TargetAgentEvaluationV1, TargetAgentEvaluationV1Config
 from gems.engine import Engine
 
 
 def test_target_agent():
-  agents = [TargetAgent(seat_id=0, debug=True)]
+  config = TargetAgentEvaluationV1Config(gem_score= 11.0)
+  evaluation = TargetAgentEvaluationV1(config=config)
+  agents = [TargetAgent(seat_id=0, evaluation=evaluation, debug=True)]
   agents[0].reset(seed=42)
   engine = Engine.new(num_players=1, seed=42)
   while not engine.game_end():
