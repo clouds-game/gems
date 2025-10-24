@@ -65,8 +65,8 @@ class TargetAgent(Agent):
   card_history: list[Card | None] = []
   debug: bool = False
 
-  def __init__(self, seat_id: int, rng: Random | None = None, debug: bool = False):
-    super().__init__(seat_id, rng)
+  def __init__(self, seat_id: int, seed: int | None = None, debug: bool = False):
+    super().__init__(seat_id, seed=seed)
     self.debug = debug
 
   def act(self, state: GameState, legal_actions: Sequence[Action], *, timeout: float | None = None) -> Action:
@@ -102,33 +102,18 @@ class TargetAgent(Agent):
   def update(self, state: GameState) -> None:
     """Update the agent's internal state.
 
-    This method is called after each game state update. The agent can
+    This method is called at the beginning of function `act`. The agent can
     use this opportunity to choose a new target card.
     """
-    if self.target_card is None or self.target_card not in state.visible_cards:
+    if self.target_card is None:
       visible_cards = list(state.visible_cards) + list(state.players[self.seat_id].reserved_cards)
       if self.target_card not in visible_cards:
-        self.target_card = self.choose_target_card(state)
+        self.target_card = self.rng.choice(visible_cards) if len(visible_cards) > 0 else None
 
-  def choose_target_card(self, state: GameState) -> Card | None:
-    """Choose a target card from the currently visible cards.
-
-    Selects uniformly at random from `state.visible_cards` using the
-    agent's `self.rng`. If no visible cards are present the target is set
-    to None.
-    """
-    visible = list(state.visible_cards) + list(state.players[self.seat_id].reserved_cards)
-    if not visible:
-      return None
-    # Use the agent's RNG for determinism when seeded
-    return self.rng.choice(visible)
-
-  def metadata(self) -> dict:
+  def _metadata(self) -> dict:
     return {
-        "type": self.__class__.__name__,
-        "seat_id": self.seat_id,
         # "card_history": self.card_history,
-        AGENT_METADATA_HISTORY_ROUND : [str(card) if card else "None" for card in self.card_history],
+        AGENT_METADATA_HISTORY_ROUND: [str(card) if card else "None" for card in self.card_history],
     }
 
 

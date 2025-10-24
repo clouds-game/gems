@@ -11,16 +11,22 @@ from ..state import PlayerState, GameState
 from ..actions import Action
 
 AGENT_METADATA_HISTORY_ROUND = "history_round"
+AGENT_SEED_GENERATOR = lambda: random.Random().randint(0, 2**31 - 1)
 
 class Agent:
-  def __init__(self, seat_id: int, rng: random.Random | None = None):
+  def __init__(self, seat_id: int, seed: int | None = None):
     self.seat_id = seat_id
     # Use a local RNG instance to guarantee reproducible behavior
-    self.rng = rng or random.Random()
+    if seed is None:
+      seed = AGENT_SEED_GENERATOR()
+    self._seed = seed
+    self.rng = random.Random(seed)
 
   def reset(self, seed: int | None = None) -> None:
     if seed is not None:
-      self.rng.seed(seed)
+      seed = AGENT_SEED_GENERATOR()
+    self._seed = seed
+    self.rng.seed(seed)
     self._reset()
 
   def _reset(self) -> None:
@@ -47,10 +53,25 @@ class Agent:
     """
     raise NotImplementedError()
 
+
   def metadata(self) -> dict:
     """Return optional metadata about the agent's internal state.
 
     This is recorded during simulations for later analysis.
+    """
+
+    metadata = {
+      "type": self.__class__.__name__,
+      "seat_id": self.seat_id,
+      "seed": self._seed,
+    }
+    if (extra := self._metadata()):
+      metadata.update(extra)
+    return metadata
+
+  def _metadata(self) -> dict:
+    """
+    Internal hook for subclasses to provide extra metadata.
     Default implementation returns an empty dict. Subclasses may override.
     """
     return {}
