@@ -62,3 +62,15 @@ def load_replays(input_file: PathLike, start: int | None = None, end: int | None
     r = Replay.model_validate_json(data)
     res.append(r)
   return res
+
+
+
+def get_win_counts(engines: list[Engine]) -> dict[int, int]:
+  """Calculate win counts for each seat_id from a list of engines."""
+  win_counts: dict[int, int] = {}
+
+  for engine in engines:
+    winners = engine.game_winners()
+    for winner in winners:
+      win_counts[winner.seat_id] = win_counts.get(winner.seat_id, 0) + 1
+  return win_counts

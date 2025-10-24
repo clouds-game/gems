@@ -44,24 +44,3 @@ def replay_engine(replays: list[Replay]) -> tuple[list[list[GameState]], list[En
     states_list.append(states)
     engines.append(engine)
   return states_list, engines
-
-
-# def save_engines(engines: list[Engine], output_file: Path, mode="a"):
-#   output_file.parent.mkdir(parents=True, exist_ok=True)
-#   with open(output_file, mode, encoding="utf-8") as f:
-#     for e in engines:
-#       json.dump(e.serialize(), f, ensure_ascii=False)
-#       f.write("\n")
-
-
-# def load_engines(input_file: Path, start: int | None = None, end: int | None = None) -> list[Engine]:
-#   with open(input_file, "r", encoding="utf-8") as f:
-#     engines_data = [json.loads(line) for line in f]
-#   if end is not None:
-#     engines_data = engines_data[:end]
-#   if start is not None:
-#     engines_data = engines_data[start:]
-#   res = []
-#   for data in tqdm(engines_data, desc="Loading engines"):
-#     res.append(Engine.deserialize(data))
-#   return res
