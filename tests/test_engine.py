@@ -14,9 +14,10 @@ def test_engine_init_and_get_state():
 
 def test_engine_reset_changes_state():
   e = Engine.new(2, ["A", "B"])
-  e.reset(3, ["X", "Y", "Z"])
+  e.reset(["X", "Y"])
   s = e.get_state()
-  assert len(s.players) == 3
+  assert s.players[0].name == "X"
+  assert s.players[1].name == "Y"
 
 
 def test_init_game_invalid_count_raises():

@@ -5,9 +5,6 @@ def test_deterministic_shuffle_same_seed():
   e1 = Engine.new(2, seed=12345)
   e2 = Engine.new(2, seed=12345)
 
-  e1.load_and_shuffle_assets()
-  e2.load_and_shuffle_assets()
-
   # For each level the ordering should be identical when using the same seed
   for lvl in (1, 2, 3):
     d1 = e1.get_deck(lvl)
@@ -17,7 +14,6 @@ def test_deterministic_shuffle_same_seed():
 
 def test_draw_and_peek_behavior():
   e = Engine.new(2, seed=42)
-  e.load_and_shuffle_assets()
 
   lvl = 1
   deck_before = e.get_deck(lvl)

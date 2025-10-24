@@ -8,19 +8,19 @@ development in the repository root so callers have a stable, package-level
 entrypoint.
 """
 
-from typing import TypeVar
+from typing import Any
 from collections.abc import Sequence
 
+from pydantic import BaseModel
+
 from .agents.core import Agent, BaseAgent
-from .consts import GameConfig
+from .consts import GAME_ASSETS_DEFAULT, GAME_ASSETS_EMPTY, GameAssets, GameConfig
 
 from .typings import ActionType, EngineMetadata, Gem, Card, Role
 from .state import PlayerState, GameState
 from .actions import Action
 from pathlib import Path
 import random
-
-
 
 class Engine:
   """A tiny, stateful wrapper around the engine helpers.
@@ -42,6 +42,7 @@ class Engine:
   _rng: random.Random
   _action_history: list[Action]
   _actions_to_replay: list[Action]
+  _initial_assets: GameAssets
   _metadata: EngineMetadata
   def __init__(
       self,
@@ -49,8 +50,9 @@ class Engine:
       num_players: int,
       names: list[str] | None,
       state: GameState,
-      decks_by_level: dict[int, list[Card]],
-      roles_deck: list[Role],
+      assets: GameAssets,
+      decks_by_level: dict[int, list[Card]] | None = None,
+      roles_deck: list[Role] | None = None,
       rng: random.Random,
       config: GameConfig | None = None,
       seed: int | None = None,
@@ -60,8 +62,9 @@ class Engine:
     self._num_players = num_players
     self._names = names
     self._state = state
-    self.decks_by_level = decks_by_level
-    self.roles_deck = roles_deck
+    self._initial_assets = assets
+    self.decks_by_level = assets.new_decks_by_level() if decks_by_level is None else decks_by_level
+    self.roles_deck = assets.new_roles_deck() if roles_deck is None else roles_deck
     self._rng = rng
     # store/use provided configuration (fall back to sensible default)
     self.config = config or GameConfig(num_players=num_players)
@@ -87,17 +90,16 @@ class Engine:
     cfg = config or GameConfig(num_players=num_players)
     # create minimal starting state using the provided config
     state = Engine.create_game(num_players, names, cfg)
+    assets = GAME_ASSETS_DEFAULT.shuffle(seed)
     engine = Engine(
       num_players=num_players,
       names=names,
       state=state,
-      decks_by_level={},
-      roles_deck=[],
+      assets=assets,
       rng=random.Random(seed),
       config=cfg,
       seed=seed,
     )
-    engine.load_and_shuffle_assets()
     visible_cards: list[Card] = []
     for lvl in engine.config.card_levels:
       drawn = engine.draw_from_deck(lvl, engine.config.card_visible_count)
@@ -121,6 +123,7 @@ class Engine:
         state=self._state,
         decks_by_level={lvl: list(deck) for lvl, deck in self.decks_by_level.items()},
         roles_deck=list(self.roles_deck),
+        assets=self._initial_assets,
         rng=random.Random(seed),  # new RNG instance
         config=self.config,
         seed=self._seed,
@@ -178,6 +181,19 @@ class Engine:
     raw_metadata = d.get('metadata', {})
     engine._metadata = EngineMetadata.deserialize(raw_metadata)
     return engine
+
+  def export(self) -> "Replay":
+    """Export this Engine's state and history as a Replay object."""
+    return Replay(
+      config=self.config,
+      assets=self._initial_assets,
+      player_names=self._names or [],
+      action_history=self._action_history,
+      metadata={
+        'seed': self._seed,
+        **self._metadata.serialize(),
+      },
+    )
 
   def replay(self, actions: Sequence[Action] | None = None) -> list[GameState]:
     """Apply a sequence of actions to the engine, returning intermediate states.
@@ -255,19 +271,20 @@ class Engine:
 
     return GameState(config=cfg, players=tuple(players), bank_in=bank, visible_cards_in=visible_cards, turn=0)
 
-  def reset(self, num_players: int | None = None, names: list[str] | None = None) -> None:
+  def reset(self, names: list[str] | None = None) -> None:
     """Reset the engine's internal GameState.
 
     If `num_players` or `names` are omitted the values provided at
     construction time are used.
     """
-    if num_players is None:
-      num_players = self._num_players
-    if names is None:
-      names = self._names
-    self._state = self.create_game(num_players, names, self.config)
-    self._num_players = num_players
+    names = names or self._names
+    if names is not None:
+      assert len(names) == self._num_players
+    self._state = self.create_game(self._num_players, names, self.config)
+    self._num_players = self._num_players
     self._names = names
+    self.decks_by_level = self._initial_assets.new_decks_by_level()
+    self.roles_deck = self._initial_assets.new_roles_deck()
 
   def get_state(self) -> GameState:
     """Return the current (immutable) GameState object."""
@@ -298,20 +315,6 @@ class Engine:
       cards_table.append(line)
 
     print("Visible cards:\n" + "\n".join([line for line in cards_table if line.strip() and not line.strip().startswith('0')]))
-
-  def load_and_shuffle_assets(self, path: str | None = None) -> None:
-    """Load assets from disk and shuffle them into decks on this Engine.
-
-    - path: optional path to config file (falls back to package assets)
-
-    The engine's RNG (self._rng) is used for deterministic shuffling when
-    seeded at Engine construction.
-    """
-    cards, roles = load_assets(path)
-    levels, roles_list = shuffle_assets(cards, roles, rng=self._rng)
-    # store on instance for consumers
-    self.decks_by_level = levels
-    self.roles_deck = roles_list
 
   def get_deck(self, level: int) -> list[Card]:
     return list(self.decks_by_level.get(level, []))
@@ -405,40 +408,9 @@ class Engine:
     return [p for p in self._state.players if p.score >= 15]
 
 
-def load_assets(path: str | None = None):
-  """Load cards and roles from a JSON config file and return (cards, roles).
-
-  The config file is expected to contain top-level `cards` and `roles` arrays
-  matching the `Card.from_dict` / `Role.from_dict` shapes.
-  """
-  import yaml
-  p = Path(path) if path is not None else Path(__file__).parent / "assets" / "config.yaml"
-  with p.open('r', encoding='utf8') as fh:
-    j = yaml.safe_load(fh)
-
-  cards = [Card.from_dict(c) for c in j.get('cards', [])]
-  roles = [Role.from_dict(r) for r in j.get('roles', [])]
-  return cards, roles
-
-
-def shuffle_assets(cards: Sequence[Card], roles: Sequence[Role], rng: random.Random | None = None):
-  """Shuffle cards by level and shuffle roles.
-
-  Returns a dict mapping level->list[Card] and a list of roles. The RNG may
-  be a `random.Random` instance; if omitted a new one is created.
-  """
-  rng = rng or random.Random()
-  # group cards by level
-  levels: dict[int, list[Card]] = {}
-  for c in cards:
-    levels.setdefault(c.level, []).append(c)
-
-  # shuffle each level's deck
-  for lvl, lst in levels.items():
-    rng.shuffle(lst)
-
-  # shuffle roles
-  roles_list = list(roles)
-  rng.shuffle(roles_list)
-
-  return levels, roles_list
+class Replay(BaseModel):
+  config: GameConfig
+  assets: GameAssets
+  player_names: list[str]
+  action_history: list[Action]
+  metadata: dict[str, Any] # seed and others

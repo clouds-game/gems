@@ -1,6 +1,10 @@
 from dataclasses import dataclass
+from pathlib import Path
+from typing import TypedDict
 from pydantic.dataclasses import dataclass as pydantic_dataclass
 from dataclasses import asdict
+
+from gems.typings import Card, Role
 
 # COIN_MAX_COUNT_PER_PLAYER = 10
 # COIN_MIN_COUNT_TAKE2_IN_DECK = 4
@@ -58,3 +62,57 @@ class GameConfig:
   @classmethod
   def deserialize(cls, data: dict) -> 'GameConfig':
     return cls(**data)
+
+
+@pydantic_dataclass(frozen=True)
+class GameAssets:
+  decks_by_level: dict[int, tuple['Card', ...]]
+  roles_deck: tuple['Role', ...]
+
+  @classmethod
+  def init(cls, cards: list['Card'], roles: list['Role']) -> 'GameAssets':
+    decks_by_level: dict[int, list['Card']] = {}
+    for card in cards:
+      decks_by_level.setdefault(card.level, []).append(card)
+    return cls(
+      decks_by_level={level: tuple(deck) for level, deck in decks_by_level.items()},
+      roles_deck=tuple(roles)
+    )
+
+  def new_decks_by_level(self) -> dict[int, list['Card']]:
+    return {level: list(deck) for level, deck in self.decks_by_level.items()}
+
+  def new_roles_deck(self) -> list['Role']:
+    return list(self.roles_deck)
+
+  @classmethod
+  def load_default(cls, path: str | None = None) -> 'GameAssets':
+    """Load cards and roles from a JSON config file and return (cards, roles).
+
+    The config file is expected to contain top-level `cards` and `roles` arrays
+    matching the `Card.from_dict` / `Role.from_dict` shapes.
+    """
+    import yaml
+    p = Path(path) if path is not None else Path(__file__).parent / "assets" / "config.yaml"
+    with p.open('r', encoding='utf8') as fh:
+      j = yaml.safe_load(fh)
+
+    cards = [Card.from_dict(c) for c in j.get('cards', [])]
+    roles = [Role.from_dict(r) for r in j.get('roles', [])]
+    return cls.init(cards, roles)
+
+  def shuffle(self, seed: int | None = None) -> 'GameAssets':
+    import random
+    rng = random.Random(seed)
+    shuffled_decks_by_level = {
+      level: tuple(rng.sample(deck, len(deck)))
+      for level, deck in self.decks_by_level.items()
+    }
+    shuffled_roles_deck = tuple(rng.sample(self.roles_deck, len(self.roles_deck)))
+    return GameAssets(
+      decks_by_level=shuffled_decks_by_level,
+      roles_deck=shuffled_roles_deck
+    )
+
+GAME_ASSETS_DEFAULT = GameAssets.load_default()
+GAME_ASSETS_EMPTY = GameAssets(decks_by_level={}, roles_deck=())

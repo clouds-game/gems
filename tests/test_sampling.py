@@ -107,7 +107,7 @@ def test_sample_buy_card():
   space = BuyCardSpace(config, seed=124) # seed=123 has card_idx == 0
 
   a = space._sample()
-  assert a['card_idx'] == 14
+  assert a['card_idx'] == 11
   assert a['payment_count'] == 3
   assert np.all(a['payment'] == [0, 0, 0, 2, 1, 0])
 
