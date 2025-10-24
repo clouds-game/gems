@@ -23,7 +23,7 @@ class Agent:
     self.rng = random.Random(seed)
 
   def reset(self, seed: int | None = None) -> None:
-    if seed is not None:
+    if seed is None:
       seed = AGENT_SEED_GENERATOR()
     self._seed = seed
     self.rng.seed(seed)
