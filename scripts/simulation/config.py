@@ -1,4 +1,9 @@
 from dataclasses import dataclass
+from pathlib import Path
+
+from gems.consts import GameConfig
+
+from .utils import PathLike, instantiate_agents, play_and_save
 
 
 @dataclass(frozen=True)
@@ -7,6 +12,12 @@ class RunConfig:
   filename: str
   n_games: int
   mode: str
+
+  def exec(self, base_dir: PathLike) -> None:
+    print(f"Run {self.n_games} games with agents {self.agents}, save to {self.filename} (mode={self.mode})")
+    agents = instantiate_agents(self.agents)
+    game_config = GameConfig(num_players=len(agents))
+    play_and_save(agents, game_config, count=self.n_games, output_file=Path(base_dir) / self.filename)
 
 @dataclass(frozen=True)
 class ScoreConfig:

@@ -1,6 +1,7 @@
 # %%
 from _common import RES_DIR
-from simulation import get_simulation_config, load_engines, play_and_save, load_and_replay, plot_rounds, plot_scores, EXTRACTORS
+from scripts.simulation.utils import load_and_replay
+from simulation import get_simulation_config, load_engines, play_and_save, replay_engine, plot_rounds, plot_scores, EXTRACTORS
 from gems.agents.core import Agent
 import json
 
@@ -8,7 +9,7 @@ Simulation_Dir = RES_DIR / "simulations"
 
 def run():
   config = get_simulation_config().run_config
-  play_and_save(config, base_dir=Simulation_Dir)
+  config.exec(base_dir=Simulation_Dir)
 
 
 def display_scores():
@@ -110,7 +111,7 @@ def test_target_agent():
 # %%
 from _common import RES_DIR
 import json
-input_file = RES_DIR / "simulations/target_with_reduce.jsonl"
+input_file = RES_DIR / "simulations/greedy_vs_target.jsonl"
 with open(input_file, "r", encoding="utf-8") as f:
   engines_data = [json.loads(line) for line in f]
 lengths = [len(data["action_history"]) for data in engines_data]
@@ -121,4 +122,14 @@ datas = [(i, data) for i, data in enumerate(engines_data)
 avg: float = sum(lengths) / len(lengths)
 avg
 
+# %%
+run()
+# %%
+display_scores()
+# %%
+display_finish_round_distribution()
+# %%
+winrate()
+# %%
+display_actions()
 # %%

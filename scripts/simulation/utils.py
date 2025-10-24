@@ -1,32 +1,41 @@
 
+import json
 from pathlib import Path
 import tomllib
 from typing import TypeAlias
+
+from tqdm import tqdm
 
 from gems.agents.core import Agent
 from gems.agents.greedy import GreedyAgent
 from gems.agents.random import RandomAgent
 from gems.agents.target import TargetAgent
 from gems.consts import GameConfig
-from .core import run_simulations, save_engines
-from .config import RunConfig, SimulationConfig
+from gems.engine import Engine
+from gems.state import GameState
+from .core import replay_engine, run_simulations
 
 PathLike: TypeAlias = str | Path
 
-def get_simulation_config(base_dir: PathLike = ".") -> SimulationConfig:
-  with open(Path(base_dir) / "simulation_config.toml", "rb") as f:
+def get_simulation_config(filename: PathLike = "simulation_config.toml"):
+  from .config import SimulationConfig
+  with open(filename, "rb") as f:
     data = tomllib.load(f)
   return SimulationConfig(data)
 
 
-def play_and_save(run_config: RunConfig, base_dir: PathLike) -> None:
-  num_players = len(run_config.agents)
-  game_config = GameConfig(num_players=num_players)
+def play_and_save(agents: list[Agent], game_config: GameConfig, *, count: int = 100, output_file: PathLike) -> None:
+  output_file = Path(output_file)
+  if output_file.exists():
+    return
+  engines = run_simulations(count, game_config, agents)
+  save_engines(engines, output_file, mode="w")
 
-  agents = instantiate_agents(run_config.agents)
-  engines = run_simulations(run_config.n_games, game_config, agents)
-  output_file = Path(base_dir) / run_config.filename
-  save_engines(engines, output_file, mode=run_config.mode)
+
+def load_and_replay(path: PathLike) -> tuple[list[list[GameState]], list[Engine]]:
+  engines = load_engines(path)
+  states_list, engines = replay_engine(engines)
+  return states_list, engines
 
 
 def instantiate_agents(agent_names: list[str]) -> list[Agent]:
@@ -43,3 +52,24 @@ def instantiate_agents(agent_names: list[str]) -> list[Agent]:
       case _:
         raise ValueError(f"Unsupported agent name: {name}")
   return agents
+
+
+def save_engines(engines: list[Engine], output_file: PathLike, mode="a"):
+  output_file = Path(output_file)
+  output_file.parent.mkdir(parents=True, exist_ok=True)
+  with open(output_file, mode, encoding="utf-8") as f:
+    for e in engines:
+      json.dump(e.serialize(), f, ensure_ascii=False)
+      f.write("\n")
+
+def load_engines(input_file: PathLike, start: int | None = None, end: int | None = None) -> list[Engine]:
+  with open(input_file, "r", encoding="utf-8") as f:
+    lines = list(f)
+  if end is not None:
+    lines = lines[:end]
+  if start is not None:
+    lines = lines[start:]
+  res = []
+  for data in tqdm(lines, desc="Loading engines"):
+    res.append(Engine.deserialize(json.loads(data)))
+  return res
