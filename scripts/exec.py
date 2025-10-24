@@ -1,11 +1,12 @@
 # %%
 from _common import RES_DIR
 from scripts.simulation.utils import load_and_replay
-from simulation import get_simulation_config, load_engines, play_and_save, replay_engine, plot_rounds, plot_scores, EXTRACTORS
-from gems.agents.core import Agent
+from simulation import get_simulation_config, load_simulation_result, replay_engine, load_engines, play_and_save, load_and_replay, plot_rounds, plot_scores, EXTRACTORS
+from gems.agents.core import AGENT_METADATA_HISTORY_ROUND, Agent
 import json
 
 Simulation_Dir = RES_DIR / "simulations"
+
 
 def run():
   config = get_simulation_config().run_config
@@ -58,19 +59,19 @@ def winrate():
 
 def display_actions():
   config = get_simulation_config().action_config
-  engines = load_engines(Simulation_Dir / config.filename, start=config.line, end=config.line + 1)
+  engines, agents_metadata_list = load_simulation_result(
+      Simulation_Dir / config.filename, start=config.line, end=config.line + 1)
 
   assert len(engines) == 1
+  assert len(agents_metadata_list) == 1
   engine = engines[0]
+  agents_metadata = agents_metadata_list[0]
 
   states = engine.replay()
   action_history = engine._action_history
-  agent_metadata = engine._metadata.agent_metadata
   num_players = engine.config.num_players
   actions_list = [action_history[i:i + num_players]
                   for i in range(0, len(action_history), num_players)]
-  agent_metadata_list = [agent_metadata[i:i + num_players]
-                         for i in range(0, len(agent_metadata), num_players)]
 
   assert len(states) == len(actions_list) + 1
   score_list = [[] for _ in range(num_players)]
@@ -81,12 +82,9 @@ def display_actions():
 
   # display details
   states[0].print_summary()
-  for state, actions, metadata in zip(states[1:], actions_list, agent_metadata_list):
+  for i, (state, actions) in enumerate(zip(states[1:], actions_list)):
     print("==" * 20)
-    print("Agent Metadata:")
-    for meta in metadata:
-      if meta:
-        print(f"  {Agent.metadata_str(meta)}")
+    Agent.print_metadata_round(agents_metadata, i)
     print(f"Actions:")
     for action in actions:
       print(f"  {action}")

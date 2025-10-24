@@ -324,23 +324,3 @@ class Role:
     metadata = tuple(d.get('metadata', ()))
     return cls(id=d.get('id'), name=d.get('name'), points=d.get('points', 0),
                requirements=reqs, metadata=metadata)
-
-
-@pydantic_dataclass
-class EngineMetadata:
-  """Metadata about the engine state for analysis and debugging.
-
-  This class encapsulates metadata collected during engine simulations,
-  such as per-agent metadata collected each turn.
-  """
-
-  agent_metadata: list[dict[str, str]] = Field(default_factory=list)
-
-  def serialize(self) -> dict:
-    return {
-        'agent_metadata': self.agent_metadata,
-    }
-
-  @classmethod
-  def deserialize(cls, data: dict) -> 'EngineMetadata':
-    return cls(agent_metadata=data.get('agent_metadata', []))

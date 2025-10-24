@@ -13,9 +13,10 @@ from gems.agents.target import TargetAgent
 from gems.consts import GameConfig
 from gems.engine import Engine
 from gems.state import GameState
-from .core import replay_engine, run_simulations
+from .core import replay_engine, run_simulations, save_simulation_result
 
 PathLike: TypeAlias = str | Path
+
 
 def get_simulation_config(filename: PathLike = "simulation_config.toml"):
   from .config import SimulationConfig
@@ -28,8 +29,8 @@ def play_and_save(agents: list[Agent], game_config: GameConfig, *, count: int = 
   output_file = Path(output_file)
   if output_file.exists():
     return
-  engines = run_simulations(count, game_config, agents)
-  save_engines(engines, output_file, mode="w")
+  engines, agent_metadata_list = run_simulations(count, game_config, agents)
+  save_simulation_result(engines, output_file, mode="w")
 
 
 def load_and_replay(path: PathLike) -> tuple[list[list[GameState]], list[Engine]]:

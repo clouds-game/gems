@@ -2,7 +2,7 @@ from collections.abc import Sequence
 from random import Random
 from gems.typings import Card, Gem, GemList
 
-from .core import Agent
+from .core import AGENT_METADATA_HISTORY_ROUND, Agent
 from ..actions import Action, NoopAction, Take3Action, Take2Action, BuyCardAction, ReserveCardAction
 from ..state import GameState
 
@@ -62,6 +62,7 @@ def quick_score(state: GameState, seat_id: int, target_card: Card | None, action
 
 class TargetAgent(Agent):
   target_card: Card | None = None
+  card_history: list[Card | None] = []
   debug: bool = False
 
   def __init__(self, seat_id: int, rng: Random | None = None, debug: bool = False):
@@ -73,6 +74,7 @@ class TargetAgent(Agent):
     if not legal_actions:
       raise ValueError("No legal actions available")
     self.update(state)
+    self.card_history.append(self.target_card)
 
     action_score = [
         (a, quick_score(state, self.seat_id, self.target_card, a)) for a in legal_actions
@@ -93,6 +95,10 @@ class TargetAgent(Agent):
         print(f"    Action: {a}, Score: {score}")
     return best
 
+  def _reset(self) -> None:
+    self.target_card = None
+    self.card_history = []
+
   def update(self, state: GameState) -> None:
     """Update the agent's internal state.
 
@@ -111,20 +117,19 @@ class TargetAgent(Agent):
     agent's `self.rng`. If no visible cards are present the target is set
     to None.
     """
-    visible = list(state.visible_cards)
+    visible = list(state.visible_cards) + list(state.players[self.seat_id].reserved_cards)
     if not visible:
       return None
     # Use the agent's RNG for determinism when seeded
     return self.rng.choice(visible)
 
-  def metadata(self) -> dict[str, str]:
-    if self.target_card:
-      return {
-          "type": self.__class__.__name__,
-          "seat_id": str(self.seat_id),
-          "target_card": str(self.target_card),
-      }
-    return {}
+  def metadata(self) -> dict:
+    return {
+        "type": self.__class__.__name__,
+        "seat_id": self.seat_id,
+        # "card_history": self.card_history,
+        AGENT_METADATA_HISTORY_ROUND : [str(card) if card else "None" for card in self.card_history],
+    }
 
 
 __all__ = ["TargetAgent", "quick_score"]
