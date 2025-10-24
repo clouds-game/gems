@@ -1,12 +1,14 @@
 # %%
-from simulation_utils import get_simulation_config, load_engines, play_and_save, load_and_replay, Simulation_Dir, plot_rounds, plot_scores, EXTRACTORS
+from _common import RES_DIR
+from simulation import get_simulation_config, load_engines, play_and_save, load_and_replay, plot_rounds, plot_scores, EXTRACTORS
 from gems.agents.core import Agent
 import json
 
+Simulation_Dir = RES_DIR / "simulations"
 
 def run():
   config = get_simulation_config().run_config
-  play_and_save(config)
+  play_and_save(config, base_dir=Simulation_Dir)
 
 
 def display_scores():
@@ -118,3 +120,5 @@ datas = [(i, data) for i, data in enumerate(engines_data)
          if len(data["action_history"]) == max_length]
 avg: float = sum(lengths) / len(lengths)
 avg
+
+# %%
