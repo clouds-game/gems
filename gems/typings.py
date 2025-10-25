@@ -3,7 +3,7 @@ from enum import Enum
 from typing import Any, TypeAlias
 from pydantic import field_validator, model_validator, Field
 from pydantic.dataclasses import dataclass as pydantic_dataclass
-from collections.abc import Iterable, Mapping, Iterator
+from collections.abc import Mapping, Iterator, Sequence
 
 from .utils import _to_kv_tuple
 
@@ -117,7 +117,7 @@ class GemList:
 
   def __str__(self) -> str:  # pragma: no cover - convenience
     return "".join(f"{n}{g.color_circle()}" for g, n in self) or "⭕"
-GemListInput: TypeAlias = GemList | Mapping[Gem, int] | Iterable[tuple[Gem, int]]
+GemListInput: TypeAlias = GemList | Mapping[Gem, int] | Sequence[tuple[Gem, int]]
 
 
 class ActionType(Enum):
@@ -149,7 +149,7 @@ class Card:
   # tuple-backed attributes for consumers.
   cost_in: InitVar[GemListInput] = Field(default_factory=GemList, alias='cost')
   cost: GemList = Field(init=False, default_factory=GemList)
-  metadata_in: InitVar[Mapping[str, Any] | Iterable[tuple[str, Any]]] = Field(default_factory=tuple, alias='metadata')
+  metadata_in: InitVar[Mapping[str, Any] | Sequence[tuple[str, Any]]] = Field(default_factory=tuple, alias='metadata')
   metadata: tuple[tuple[str, Any], ...] = Field(init=False, default_factory=tuple)
 
   def __post_init__(self, cost_in, metadata_in):
@@ -189,16 +189,16 @@ class Card:
 
 
 @pydantic_dataclass(frozen=True)
-class CardList:
+class CardList(Sequence['Card']):
   """Immutable list-like wrapper for a sequence of Card objects.
 
   Minimal helper used to represent visible/reserved/purchased card lists
   in the public API. Mirrors the shape of `GemList` but for `Card`.
   """
-  _items_in: InitVar[Iterable['Card']] = Field(default_factory=tuple, alias='items')
+  _items_in: InitVar[Sequence['Card']] = Field(default_factory=tuple, alias='items')
   _items: tuple['Card', ...] = Field(init=False, default_factory=tuple)
 
-  def __post_init__(self, _items_in: Iterable['Card'] = ()):
+  def __post_init__(self, _items_in: Sequence['Card'] = ()):
     object.__setattr__(self, '_items', tuple(_items_in))
 
   def __iter__(self):
@@ -207,7 +207,7 @@ class CardList:
   def __len__(self) -> int:
     return len(self._items)
 
-  def __getitem__(self, i) -> Card:
+  def __getitem__(self, i):
     return self._items[i]
 
   def as_tuple(self) -> tuple['Card', ...]:
@@ -230,7 +230,7 @@ class CardList:
         return c
     return None
 
-  def merge(self, *others: Iterable['Card']) -> 'CardList':
+  def merge(self, *others: Sequence['Card']) -> 'CardList':
     """Return a new CardList combining this CardList with other iterables of Card.
 
     Each element in `others` may be a `CardList` or any iterable of `Card`.
@@ -244,7 +244,7 @@ class CardList:
         items.extend(tuple(o))
     return CardList(items)
 
-  def __add__(self, other: Iterable['Card']) -> 'CardList':
+  def __add__(self, other: Sequence['Card']) -> 'CardList':
     """Support `CardList + other` to produce a new merged CardList."""
     return self.merge(other)
 
@@ -301,7 +301,7 @@ class Role:
   # public attributes `requirements` and `metadata` are always tuples.
   requirements_in: InitVar[GemListInput] = Field(default_factory=GemList, alias='requirements')
   requirements: GemList = Field(init=False, default_factory=GemList)
-  metadata_in: InitVar[Mapping[str, Any] | Iterable[tuple[str, Any]]] = Field(default_factory=tuple, alias='metadata')
+  metadata_in: InitVar[Mapping[str, Any] | Sequence[tuple[str, Any]]] = Field(default_factory=tuple, alias='metadata')
   metadata: tuple[tuple[str, Any], ...] = Field(init=False, default_factory=tuple)
 
   def __post_init__(self, requirements_in, metadata_in):

@@ -85,7 +85,7 @@ def test_card_idx():
   with pytest.raises(ValueError):
     CardIdx(visible_idx=1, reserve_idx=2)
 
-def test_pydantic():
+def test_pydantic_dataclass():
   from pydantic import Field
   from pydantic.dataclasses import dataclass as pydantic_dataclass
   from dataclasses import InitVar
@@ -115,3 +115,54 @@ def test_pydantic():
   a = MyList([('a', 1), ('b', 2)]) # static typing failed
 
   assert a.value == {'a': 1, 'b': 2}
+
+
+def test_pydantic_base_model():
+  from pydantic import BaseModel, Field, field_validator
+  from pydantic.dataclasses import dataclass as pydantic_dataclass
+  from dataclasses import InitVar, dataclass
+  from collections.abc import Mapping, Sequence
+  from enum import Enum
+  import json
+
+  class MyEnum(Enum):
+    X = 'x'
+    Y = 'y'
+
+  @pydantic_dataclass(frozen=True)
+  class MyListModel:
+    input: InitVar[Mapping[MyEnum, int] | Sequence[tuple[MyEnum, int]]] = Field(alias='value')
+    value: dict[MyEnum, int] = Field(default_factory=dict, init=False)
+
+    @field_validator('input', mode='before')
+    @classmethod
+    def validate_value(cls, v: dict[MyEnum, int] | list[tuple[MyEnum, int]]):
+      print(f"Validating input: {v}")
+      if isinstance(v, dict):
+        return v
+      elif isinstance(v, list):
+        return dict(v)
+      else:
+        raise ValueError("Invalid input type for MyListModel")
+
+    def __post_init__(self, input):
+      object.__setattr__(self, 'value', input)
+
+  @dataclass(frozen=True)
+  class InnerModel:
+    list: tuple[MyListModel, ...]
+
+  class MyModel(BaseModel):
+    inner: InnerModel
+
+
+  a = MyModel(inner=InnerModel(list=(MyListModel(value={MyEnum.X: 10, MyEnum.Y: 20}),)))
+
+  assert a.inner.list[0].value == {MyEnum.X: 10, MyEnum.Y: 20}
+
+  s = a.model_dump_json()
+  d = json.loads(s)
+  assert d == {'inner': {'list': [{'value': {'x': 10, 'y': 20}}]}}
+
+  a2 = MyModel.model_validate(d)
+  assert a2.inner.list[0].value == {MyEnum.X: 10, MyEnum.Y: 20}
