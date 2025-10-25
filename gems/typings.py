@@ -82,6 +82,9 @@ class GemList:
   def __getitem__(self, i):
     return self._pairs[i]
 
+  def __hash__(self) -> int:
+    return hash(frozenset(self.normalized()._pairs.items()))
+
   def normalized(self) -> 'GemList':
     """Return a new GemList with all gems in COLOR_ORDER and zero counts removed."""
     counts = self._pairs

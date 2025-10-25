@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 from gems.consts import GameConfig
 
-from .typings import Gem, GemList, Card, CardList, GemListInput, Role
+from .typings import CardIdx, Gem, GemList, Card, CardList, GemListInput, Role
 
 if TYPE_CHECKING:
   from .actions import Action
@@ -180,6 +180,18 @@ class GameState:
     if num_players <= 0:
       raise ValueError("GameState must have at least one player")
     object.__setattr__(self, 'round', self.turn // num_players)
+
+  def get_card(self, idx: CardIdx, seat_id: int) -> Card:
+    """Return the Card at visible index `idx` for player `seat_id`.
+
+    Raises IndexError if `idx` is out of range.
+    """
+    if idx.visible_idx is not None:
+      return self.visible_cards[idx.visible_idx]
+    if idx.reserve_idx is not None:
+      player = self.players[seat_id]
+      return player.reserved_cards[idx.reserve_idx]
+    raise IndexError("CardIdx must have either visible_idx or reserve_idx set")
 
   def advance_turn(self, decks_by_level: dict[int, list[Card]] | None = None) -> 'GameState':
     """Return a new GameState with the turn advanced by one.

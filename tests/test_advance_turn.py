@@ -29,7 +29,7 @@ def test_advance_turn_with_decks_refill():
   d2 = [make_card(2, 'l2c1')]
   decks = {1: d1, 2: d2, 3: []}
 
-  gs2 = gs.advance_turn(decks_by_level=decks, per_level=4)
+  gs2 = gs.advance_turn(decks_by_level=decks)
   # turn advanced
   assert gs2.turn == 6
   # visible cards should include IDs from the decks

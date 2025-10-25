@@ -76,18 +76,17 @@ class Engine:
 
   @staticmethod
   def new(
-      num_players: int = 4,
+      num_players: int | None = None,
       names: list[str] | None = None,
       seed: int | None = None,
       config: GameConfig | None = None,
   ) -> "Engine":
     # basic validation: at least 1 player
-    if num_players < 1:
-      raise ValueError("num_players must be positive")
 
-    cfg = config or GameConfig(num_players=num_players)
     # create minimal starting state using the provided config
-    state = Engine.create_game(num_players, names, cfg)
+    state = Engine.create_game(num_players, names, config)
+    config = state.config
+    num_players = state.config.num_players
     assets = GAME_ASSETS_DEFAULT.shuffle(seed)
     engine = Engine(
       num_players=num_players,
@@ -95,7 +94,7 @@ class Engine:
       state=state,
       assets=assets,
       rng=random.Random(seed),
-      config=cfg,
+      config=config,
       seed=seed,
     )
     visible_cards: list[Card] = []
@@ -106,7 +105,7 @@ class Engine:
     visible_roles = []
     for _ in range(min(roles_to_draw, len(engine.roles_deck))):
       visible_roles.append(engine.roles_deck.pop())
-    engine._state = GameState(config=cfg, players=engine._state.players, bank=engine._state.bank,
+    engine._state = GameState(config=config, players=engine._state.players, bank=engine._state.bank,
                               visible_cards_in=visible_cards, visible_roles_in=visible_roles,
                               turn=engine._state.turn)
     engine._all_noops_last_round = False
@@ -144,12 +143,16 @@ class Engine:
 
 
   @staticmethod
-  def create_game(num_players: int = 4, names: list[str] | None = None, config: GameConfig | None = None) -> GameState:
+  def create_game(num_players: int | None = None, names: list[str] | None = None, config: GameConfig | None = None) -> GameState:
     """Create and return a minimal starting GameState.
 
     - num_players: between 2 and 4 (inclusive).
     - names: optional list of player display names; defaults to "Player 1"...
     """
+    if num_players is None:
+      if config is None:
+        raise ValueError("Either num_players or config must be provided")
+      num_players = config.num_players
     cfg = config or GameConfig(num_players=num_players)
 
     names = names or [f"Player {i + 1}" for i in range(num_players)]

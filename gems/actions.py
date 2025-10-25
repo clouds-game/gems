@@ -57,6 +57,22 @@ class Action(ABC):
   def noop(cls) -> 'NoopAction':
     return NoopAction.create()
 
+  def check(self, state: GameState) -> bool:
+    """Return True if this action can be applied for the current-turn player in `state`.
+
+    This is a thin wrapper that calls the concrete `_check` method
+    implemented by subclasses.
+    """
+    num_players = len(state.players)
+    if num_players == 0:
+      raise ValueError("state must contain at least one player")
+
+    seat = state.turn % num_players
+    player = state.players[seat]
+    config = state.config
+
+    return self._check(player, state, config)
+
   def apply(self, state: GameState) -> GameState:
     """Apply this action for the current-turn player and return a new GameState.
 

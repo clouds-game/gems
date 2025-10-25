@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TypedDict
+from typing import Annotated, TypedDict
+from pydantic import Field, model_validator
 from pydantic.dataclasses import dataclass as pydantic_dataclass
 from dataclasses import asdict
 
@@ -9,7 +10,7 @@ from gems.typings import Card, Role
 # COIN_MAX_COUNT_PER_PLAYER = 10
 # COIN_MIN_COUNT_TAKE2_IN_DECK = 4
 # COIN_GOLD_INIT = 5
-COIN_DEFAULT_INIT = (4, 4, 5, 7, 7)
+COIN_DEFAULT_INIT = (3, 4, 5, 7, 7)
 # CARD_VISIBLE_COUNT = 4
 # CARD_LEVELS = (1, 2, 3)
 # CARD_LEVEL_COUNT = len(CARD_LEVELS)
@@ -25,7 +26,7 @@ class GameConfig:
   Uses pydantic's dataclass wrapper to provide runtime validation while
   retaining a light dataclass footprint. Public attribute API preserved.
   """
-  num_players: int = DEFAULT_PLAYERS
+  num_players: Annotated[int, Field(ge=1)] = DEFAULT_PLAYERS
   coin_init: int = 0
   coin_gold_init: int = 5
   coin_max_count_per_player: int = 10
@@ -38,15 +39,13 @@ class GameConfig:
   take3_count: int = 3
   take2_count: int = 2
 
-  def __post_init__(self):
-    # pydantic already ran basic type validation; now apply domain rules.
-    num_players = self.num_players
-    if num_players <= 0:
-      raise ValueError(f'num_players must be positive, got {num_players}')
-    # coin_init: choose default mapping value by number of players capped at 5 index logic
-    if not self.coin_init:
-      object.__setattr__(self, 'coin_init', COIN_DEFAULT_INIT[max(num_players, 5) - 1])
-
+  @model_validator(mode='after')
+  def check_coin_init(self):
+    if self.coin_init == 0:
+      # Provide default based on num_players
+      idx = min(self.num_players, 5) - 1
+      object.__setattr__(self, 'coin_init', COIN_DEFAULT_INIT[idx])
+    return self
 
   @property
   def card_level_count(self) -> int:
