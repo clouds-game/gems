@@ -52,7 +52,7 @@ def plot_winrate(win_counts: dict[int, int], total_games: int, player_labels: li
   counts = [v for _, v in seatid_counts]
 
   # Prepare labels with counts and percentages (use provided total for percent)
-  percents = [(c / total_counts) * 100 for c in counts]
+  percents = [(c / max(1, total_counts)) * 100 for c in counts]
   labels = [f"{lab}\n{c} wins\n{p:.1f}%" for lab, c, p in zip(player_labels, counts, percents)]
 
   # Draw a donut chart (pie with a hole)

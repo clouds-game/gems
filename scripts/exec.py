@@ -136,7 +136,6 @@ def pairwise_play_statistics():
       average_scores_fig_file = Simulation_Dir / f"{stem}_average_scores.png"
       winrate_fig_file = Simulation_Dir / f"{stem}_winrate.png"
 
-      engines = []
       if average_scores_fig_file.exists():
         print(f"{stem} statistics exists, skip.")
       else:
@@ -150,8 +149,8 @@ def pairwise_play_statistics():
                           labels=[f"{AgentClass.__name__}", f"{OpponentClass.__name__}"])
         fig.savefig(average_scores_fig_file)
 
-        win_counts = get_win_counts(engines)
-        fig = plot_winrate(win_counts, total_games=len(engines),
+        win_counts = get_win_counts([result.engine for result in results])
+        fig = plot_winrate(win_counts, total_games=len(results),
                            player_labels=[f"{AgentClass.__name__}", f"{OpponentClass.__name__}"])
         fig.savefig(winrate_fig_file)
 
@@ -166,3 +165,5 @@ def main():
   pairwise_play_statistics()
 
 # %%
+data_file = Simulation_Dir / "TargetAgent_vs_RandomAgent.jsonl"
+results = load_and_replay(data_file)

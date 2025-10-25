@@ -318,7 +318,7 @@ class Replay(BaseModel):
   def replay(self) -> tuple[list[GameState], Engine]:
     """Replay the stored action history, returning the list of GameStates."""
     engine = Engine.new(
-      num_players=len(self.player_names),
+      num_players=self.config.num_players,
       names=self.player_names,
       seed=self.metadata.get('seed', None),
       config=self.config,

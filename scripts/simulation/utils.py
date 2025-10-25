@@ -64,14 +64,17 @@ def load_replays(input_file: PathLike, start: int | None = None, end: int | None
   return res
 
 
+# TODO change to list
 def get_win_counts(engines: list[Engine]) -> dict[int, int]:
   """Calculate win counts for each seat_id from a list of engines."""
   win_counts: dict[int, int] = {}
+  for i in range(engines[0].config.num_players):
+    win_counts[i] = 0
 
   for engine in engines:
     winners = engine.game_winners()
     for winner in winners:
-      win_counts[winner.seat_id] = win_counts.get(winner.seat_id, 0) + 1
+      win_counts[winner.seat_id] += 1
   return win_counts
 
 
