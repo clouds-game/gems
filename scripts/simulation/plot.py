@@ -26,7 +26,7 @@ def plot_scores(score_lists: list[list[int]] | list[list[float]], labels: list[s
   return fig
 
 
-def plot_rounds(finish_rounds: list[int], label: str) -> Figure:
+def plot_rounds(finish_rounds: list[int], label: str | None = None) -> Figure:
   fig = plt.figure()
   ax = fig.add_subplot(111)
   ax.hist(finish_rounds, bins=range(0, max(finish_rounds) + 2, 1), label=label)

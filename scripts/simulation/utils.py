@@ -30,9 +30,8 @@ def play_and_save(agents: list[BaseAgent], game_config: GameConfig, *, count: in
   output_file = Path(output_file)
   if output_file.exists():
     return
-  engines, agent_metadata_list = run_simulations(count, game_config, agents)
-  replays = [export_to_replay(engine, metadata)
-             for engine, metadata in zip(engines, agent_metadata_list)]
+  results = run_simulations(count, game_config, agents)
+  replays = [r.replay for r in results]
   save_replays(replays, output_file)
 
 

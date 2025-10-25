@@ -270,7 +270,7 @@ class Engine:
     """
     self._state = self._state.advance_turn(self.decks_by_level)
 
-  def play_one_round(self, agents: list[BaseAgent], debug=True) -> None:
+  def play_one_round(self, agents: list[BaseAgent], debug=True) -> GameState:
     """Play a full round (one turn per player) using specific Agents.
 
     This is a convenience for quick simulations and testing. It does not
@@ -295,6 +295,7 @@ class Engine:
       self.advance_turn()
     if all_noops:
       self._all_noops_last_round = True
+    return self._state
 
   def game_end(self) -> bool:
     """Return True if any player has reached the winning score (15 points)."""
