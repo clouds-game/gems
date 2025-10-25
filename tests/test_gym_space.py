@@ -262,3 +262,17 @@ def test_sample_reserve_card_dict():
     print(action)
     assert isinstance(action, ReserveCardAction)
     assert action._check_without_state(config)
+
+def test_sample_action_dict():
+  config = GameConfig()
+  aspace = ActionSpace(config)
+
+  for _ in range(1000):
+    d = aspace.sample()
+    assert 'type' in d
+    type_idx = int(d['type'])
+    assert 0 <= type_idx < len(aspace._type_order)
+
+    action = aspace.decode(d) # type: ignore
+    assert isinstance(action, Action)
+    assert action._check_without_state(config)

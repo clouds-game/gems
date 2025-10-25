@@ -1,10 +1,10 @@
 from dataclasses import InitVar, dataclass, field
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from typing import TYPE_CHECKING
 
 from gems.consts import GameConfig
 
-from .typings import Gem, GemList, Card, CardList, Role
+from .typings import Gem, GemList, Card, CardList, GemListInput, Role
 
 if TYPE_CHECKING:
   from .actions import Action
@@ -153,11 +153,11 @@ class GameState:
   config: GameConfig
   players: tuple["PlayerState", ...]
   # bank is represented as an immutable tuple of (resource, amount).
-  bank_in: InitVar[Iterable[tuple[Gem, int]] | Mapping[Gem, int] | GemList | None] = None
+  bank_in: InitVar[GemListInput | None] = None
   bank: GemList = field(default_factory=GemList)
-  visible_cards_in: InitVar[Iterable[Card] | CardList | None] = None
+  visible_cards_in: InitVar[CardList | Sequence[Card] | None] = None
   visible_cards: CardList = field(default_factory=CardList)
-  visible_roles_in: InitVar[Iterable[Role] | list[Role] | None] = None
+  visible_roles_in: InitVar[Sequence[Role] | None] = None
   visible_roles: tuple[Role, ...] = field(default_factory=tuple)
   turn: int = 0
   round: int = 0

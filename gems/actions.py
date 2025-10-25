@@ -4,7 +4,6 @@ from abc import ABC, abstractmethod
 
 from .consts import GameConfig
 from .typings import Gem, ActionType, GemList, Card, CardIdx
-from typing import cast
 from .state import PlayerState, GameState
 from .utils import _replace_tuple
 

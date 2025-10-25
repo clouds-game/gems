@@ -10,10 +10,10 @@ def test_export_and_replay_model_roundtrip():
 
   e = Engine.new(2, ["P1", "P2"], seed=42)
   # perform a simple deterministic action and record it on the engine
-  # act = Action.take3(Gem.RED, Gem.BLUE, Gem.WHITE)
-  # e._state = act.apply(e.get_state())
-  # e.advance_turn()
-  # e._action_history.append(act)
+  act = Action.take3(Gem.RED, Gem.BLUE, Gem.WHITE)
+  e._state = act.apply(e.get_state())
+  e.advance_turn()
+  e._action_history.append(act)
 
   rep = e.export()
   assert isinstance(rep, Replay)
