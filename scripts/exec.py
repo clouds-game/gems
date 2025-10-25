@@ -21,13 +21,10 @@ SIMULATION_NUM = 5
 
 # %%
 
-# TODO generate filename??
-# TODO pass candidates and num of games as parameters?
-# TODO TargetAgent with different configs?
-# single player
+
 
 def init_agents(agent_cls: Sequence[type[BaseAgent]]) -> list[BaseAgent]:
-  return [cls(seat_id=i) for i, cls in enumerate(agent_cls)]
+  return [cls(seat_id=i, name=None) for i, cls in enumerate(agent_cls)]
 
 def play(agents: list[BaseAgent], all_visiable: bool = False, count: int = SIMULATION_NUM, output_dir = Simulation_Dir):
   if all_visiable:
@@ -35,7 +32,7 @@ def play(agents: list[BaseAgent], all_visiable: bool = False, count: int = SIMUL
   else:
     game_config = GameConfig(num_players=len(agents))
 
-  names = "".join([f"[{agent.__class__.__name__}]" for agent in agents])
+  names = "".join([f"[{agent.name}]" for agent in agents])
 
   filename = f"run_{names}{"_all_visiable" if all_visiable else ""}.jsonl"
   output_file = output_dir / filename
@@ -95,3 +92,5 @@ for (result, file) in zip(results, files):
     continue
   num_players = result[0].engine.config.num_players
   analysis(result, labels=labels, output_dir=output_dir)
+
+#%%

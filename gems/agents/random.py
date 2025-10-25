@@ -7,6 +7,9 @@ from ..state import GameState
 
 
 class RandomAgent(Agent):
+  def __init__(self, seat_id: int, *, seed: int | None = None, name: str | None = None) -> None:
+    super().__init__(seat_id, seed=seed, name=name)
+
   def act(self, state: GameState, legal_actions: Sequence[Action], *, timeout: float | None = None) -> Action:
     if not legal_actions:
       raise ValueError("No legal actions available")

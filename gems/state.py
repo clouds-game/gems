@@ -181,7 +181,7 @@ class GameState:
       raise ValueError("GameState must have at least one player")
     object.__setattr__(self, 'round', self.turn // num_players)
 
-  def advance_turn(self, decks_by_level: dict[int, list[Card]] | None = None, per_level: int = 4) -> 'GameState':
+  def advance_turn(self, decks_by_level: dict[int, list[Card]] | None = None) -> 'GameState':
     """Return a new GameState with the turn advanced by one.
 
     If `decks_by_level` is provided (a mutable mapping level->list[Card])
@@ -192,6 +192,7 @@ class GameState:
     refilling is performed.
     """
     # Start with current visible cards as a list we can extend
+    per_level = self.config.card_visible_count
     visible = list(self.visible_cards)
 
     if decks_by_level is not None:

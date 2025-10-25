@@ -22,6 +22,7 @@ from .actions import Action, BuyCardAction, NoopAction, ReserveCardAction, Take2
 from pathlib import Path
 import random
 
+
 class Engine:
   """A tiny, stateful wrapper around the engine helpers.
 
@@ -42,6 +43,7 @@ class Engine:
   _rng: random.Random
   _action_history: list[Action]
   _initial_assets: GameAssets
+
   def __init__(
       self,
       *,
@@ -55,7 +57,7 @@ class Engine:
       config: GameConfig | None = None,
       seed: int | None = None,
       all_noops_last_round: bool = False,
-      action_history: list[Action] | None = None,
+      action_history: list[Action] = [],
   ) -> None:
     self._num_players = num_players
     self._names = names
@@ -70,7 +72,7 @@ class Engine:
     # engines can be reproduced deterministically
     self._seed = seed
     self._all_noops_last_round = all_noops_last_round
-    self._action_history = list(action_history) if action_history is not None else []
+    self._action_history = action_history
 
   @staticmethod
   def new(
@@ -186,6 +188,8 @@ class Engine:
     self._names = names
     self.decks_by_level = self._initial_assets.new_decks_by_level()
     self.roles_deck = self._initial_assets.new_roles_deck()
+    self._action_history = []
+    self._all_noops_last_round = False
 
   def get_state(self) -> GameState:
     """Return the current (immutable) GameState object."""
@@ -285,12 +289,11 @@ class Engine:
       if not all(a.type == ActionType.NOOP for a in actions):
         all_noops = False
       action = agent.act(state, actions)
-      if debug:
-        print(f"Turn {state.turn} — player {seat} performs: {action}")
       # apply action and update engine state
       self._state = action.apply(state)
       self._action_history.append(action)
       if debug:
+        print(f"Turn {state.turn} — player {seat} performs: {action}")
         self.print_summary()
       self.advance_turn()
     if all_noops:

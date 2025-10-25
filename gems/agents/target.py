@@ -107,8 +107,8 @@ class TargetAgent(Agent):
   card_history: list[Card | None] = []
   debug: bool = False
 
-  def __init__(self, seat_id: int, seed: int | None = None, evaluation: BaseEvaluation = TargetAgentEvaluationV1(), debug: bool = False):
-    super().__init__(seat_id, seed=seed)
+  def __init__(self, seat_id: int, *, seed: int | None = None, evaluation: BaseEvaluation = TargetAgentEvaluationV1(), name: str | None = None,debug: bool = False):
+    super().__init__(seat_id, seed=seed, name=name)
     self.evaluation = evaluation
     self.debug = debug
 

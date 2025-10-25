@@ -11,11 +11,13 @@ from ..state import PlayerState, GameState
 from ..actions import Action
 
 AGENT_METADATA_HISTORY_ROUND = "history_round"
-AGENT_SEED_GENERATOR = lambda: random.Random().randint(0, 2**31 - 1)
+def AGENT_SEED_GENERATOR(): return random.Random().randint(0, 2**31 - 1)
+
 
 class Agent:
-  def __init__(self, seat_id: int, seed: int | None = None):
+  def __init__(self, seat_id: int, *, seed: int | None = None, name: str | None) -> None:
     self.seat_id = seat_id
+    self.name = name if name is not None else self.__class__.__name__
     # Use a local RNG instance to guarantee reproducible behavior
     if seed is None:
       seed = AGENT_SEED_GENERATOR()
@@ -53,7 +55,6 @@ class Agent:
     """
     raise NotImplementedError()
 
-
   def metadata(self) -> dict:
     """Return optional metadata about the agent's internal state.
 
@@ -61,9 +62,9 @@ class Agent:
     """
 
     metadata = {
-      "type": self.__class__.__name__,
-      "seat_id": self.seat_id,
-      "seed": self._seed,
+        "type": self.__class__.__name__,
+        "seat_id": self.seat_id,
+        "seed": self._seed,
     }
     if (extra := self._metadata()):
       metadata.update(extra)
@@ -76,7 +77,6 @@ class Agent:
     """
     return {}
 
-
   @classmethod
   def print_metadata_round(cls, agents_metadata: list[dict[str, str]], round: int) -> None:
     print("Agent Metadata:")
@@ -86,6 +86,7 @@ class Agent:
           type_name = data.get("type", "Agent")
           seat_id = data.get("seat_id", "unknown")
           print(f"  [{type_name}] seat_id={seat_id} {history[round]})")
+
 
 BaseAgent = TypeVar('BaseAgent', bound=Agent)
 __all__ = ["Agent", "BaseAgent"]

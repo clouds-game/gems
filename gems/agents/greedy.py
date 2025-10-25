@@ -94,8 +94,8 @@ class GreedyAgentEvaluationV1(BaseEvaluation[GreedyAgentEvaluationV1Config]):
 class GreedyAgent(Agent):
   evaluation: BaseEvaluation
 
-  def __init__(self, seat_id: int, seed: int | None = None, evaluation: BaseEvaluation = GreedyAgentEvaluationV1(), debug: bool = False):
-    super().__init__(seat_id, seed=seed)
+  def __init__(self, seat_id: int, *, seed: int | None = None, evaluation: BaseEvaluation = GreedyAgentEvaluationV1(), name: str | None = None, debug: bool = False):
+    super().__init__(seat_id, seed=seed, name=name)
     self.evaluation = evaluation
 
   def act(self, state: GameState, legal_actions: Sequence[Action], *, timeout: float | None = None) -> Action:
