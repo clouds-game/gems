@@ -1,4 +1,5 @@
 
+from dataclasses import dataclass
 import json
 from pathlib import Path
 import tomllib
@@ -6,14 +7,14 @@ from typing import TypeAlias
 
 from tqdm import tqdm
 
-from gems.agents.core import Agent
+from gems.agents.core import Agent, BaseAgent
 from gems.agents.greedy import GreedyAgent
 from gems.agents.random import RandomAgent
 from gems.agents.target import TargetAgent
 from gems.consts import GameConfig
 from gems.engine import Engine, Replay
 from gems.state import GameState
-from .core import export_to_replay, replay_engine, run_simulations
+from .core import SimulationResult, export_to_replay, apply_replays, run_simulations
 
 PathLike: TypeAlias = str | Path
 
@@ -25,7 +26,7 @@ def get_simulation_config(filename: PathLike = "simulation_config.toml"):
   return SimulationConfig(data)
 
 
-def play_and_save(agents: list[Agent], game_config: GameConfig, *, count: int = 100, output_file: PathLike) -> None:
+def play_and_save(agents: list[BaseAgent], game_config: GameConfig, *, count: int = 100, output_file: PathLike) -> None:
   output_file = Path(output_file)
   if output_file.exists():
     return
@@ -35,10 +36,9 @@ def play_and_save(agents: list[Agent], game_config: GameConfig, *, count: int = 
   save_replays(replays, output_file)
 
 
-def load_and_replay(path: PathLike) -> tuple[list[list[GameState]], list[Engine]]:
-  replays = load_replays(path)
-  states_list, engines = replay_engine(replays)
-  return states_list, engines
+def load_and_replay(path: PathLike, *, start: int | None = None, end: int | None = None) -> list[SimulationResult]:
+  replays = load_replays(path, start=start, end=end)
+  return apply_replays(replays)
 
 
 def save_replays(replays: list[Replay], output_file: PathLike, mode="a"):
@@ -64,7 +64,6 @@ def load_replays(input_file: PathLike, start: int | None = None, end: int | None
   return res
 
 
-
 def get_win_counts(engines: list[Engine]) -> dict[int, int]:
   """Calculate win counts for each seat_id from a list of engines."""
   win_counts: dict[int, int] = {}
@@ -74,3 +73,19 @@ def get_win_counts(engines: list[Engine]) -> dict[int, int]:
     for winner in winners:
       win_counts[winner.seat_id] = win_counts.get(winner.seat_id, 0) + 1
   return win_counts
+
+
+def instantiate_agents(agent_names: list[str]) -> list[Agent]:
+  """Instantiate agents from their class names."""
+  agents: list[Agent] = []
+  for seat_id, name in enumerate(agent_names):
+    match name:
+      case "RandomAgent":
+        agents.append(RandomAgent(seat_id=seat_id))
+      case "GreedyAgent":
+        agents.append(GreedyAgent(seat_id=seat_id))
+      case "TargetAgent":
+        agents.append(TargetAgent(seat_id=seat_id))
+      case _:
+        raise ValueError(f"Unsupported agent name: {name}")
+  return agents

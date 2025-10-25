@@ -18,7 +18,7 @@ from .consts import GAME_ASSETS_DEFAULT, GAME_ASSETS_EMPTY, GameAssets, GameConf
 
 from .typings import ActionType, Gem, Card, Role
 from .state import PlayerState, GameState
-from .actions import Action
+from .actions import Action, BuyCardAction, NoopAction, ReserveCardAction, Take2Action, Take3Action
 from pathlib import Path
 import random
 
@@ -134,7 +134,7 @@ class Engine:
       config=self.config,
       assets=self._initial_assets,
       player_names=self._names or [],
-      action_history=self._action_history,
+      action_history=self._action_history, # type: ignore
       metadata={
         'seed': self._seed,
       },
@@ -312,7 +312,7 @@ class Replay(BaseModel):
   config: GameConfig
   assets: GameAssets
   player_names: list[str]
-  action_history: list[Action]
+  action_history: list[Take3Action | Take2Action | ReserveCardAction | BuyCardAction | NoopAction]
   metadata: dict[str, Any] # seed and others
 
   def replay(self) -> tuple[list[GameState], Engine]:

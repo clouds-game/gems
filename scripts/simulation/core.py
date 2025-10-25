@@ -1,13 +1,14 @@
 
 
+from dataclasses import dataclass
 from tqdm import tqdm
-from gems.agents.core import Agent
+from gems.agents.core import Agent, BaseAgent
 from gems.consts import GameConfig
 from gems.engine import Engine, Replay
 from gems.state import GameState
 
 
-def run_simulations(n: int, config: GameConfig, agents: list[Agent], debug: bool = False) -> tuple[list[Engine], list[list[dict]]]:
+def run_simulations(n: int, config: GameConfig, agents: list[BaseAgent], debug: bool = False) -> tuple[list[Engine], list[list[dict]]]:
   """Run `n` independent games using `agents` for each seat.
   - n: number of full rounds to play (each run starts a fresh Engine)
   - agents: list of agents, one per player seat.
@@ -35,12 +36,42 @@ def export_to_replay(engine: Engine, agent_metadata: list[dict]) -> Replay:
   return replay
 
 
-def replay_engine(replays: list[Replay]) -> tuple[list[list[GameState]], list[Engine]]:
-  states_list: list[list[GameState]] = []
+@dataclass
+class SimulationResult:
+  states: list[GameState]
+  engine: Engine
+  replay: Replay
+  agent_metadata: list[dict]
 
-  engines: list[Engine] = []
+  @property
+  def action_history(self) -> list:
+    return self.replay.action_history
+
+  @property
+  def num_players(self) -> int:
+    return self.engine.config.num_players
+
+  @property
+  def num_rounds(self) -> int:
+    return len(self.action_history) // self.num_players
+
+  @property
+  def config(self) -> GameConfig:
+    return self.engine.config
+
+
+def apply_replays(replays: list[Replay]) -> list[SimulationResult]:
+  result = []
   for replay in tqdm(replays, desc="replay game"):
-    states, engine = replay.replay()
-    states_list.append(states)
-    engines.append(engine)
-  return states_list, engines
+    result.append(apply_replay(replay))
+  return result
+
+
+def apply_replay(replay: Replay) -> SimulationResult:
+  states, engine = replay.replay()
+  return SimulationResult(
+      states=states,
+      engine=engine,
+      replay=replay,
+      agent_metadata=replay.metadata.get("agents", []),
+  )

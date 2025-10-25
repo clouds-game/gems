@@ -76,10 +76,3 @@ def plot_winrate(win_counts: dict[int, int], total_games: int, player_labels: li
   ax.axis("equal")
   fig.tight_layout()
   return fig
-
-
-# %%
-win_counts = {0: 60, 1: 30, 2: 20}
-total_games = 100
-fig = plot_winrate(win_counts, total_games, player_labels=["Alice", "Bob", "Charlie"])
-fig.show()
