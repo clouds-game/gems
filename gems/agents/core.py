@@ -3,9 +3,11 @@
 Follows the contract described in AGENTS.md. Keep this file minimal.
 All Python code in this repo uses 2-space indentation.
 """
+from dataclasses import asdict, dataclass
+from pydantic import BaseModel, field_validator
 import random
 from collections.abc import Sequence
-from typing import TypeVar
+from typing import Any, ClassVar, TypeVar
 
 from ..state import PlayerState, GameState
 from ..actions import Action
@@ -14,7 +16,13 @@ AGENT_METADATA_HISTORY_ROUND = "history_round"
 def AGENT_SEED_GENERATOR(): return random.Random().randint(0, 2**31 - 1)
 
 
+@dataclass
 class Agent:
+  seat_id: int
+  name: str
+
+  agent_name_to_cls: ClassVar[dict[str, type["Agent"]]] = {}
+
   def __init__(self, seat_id: int, *, seed: int | None = None, name: str | None) -> None:
     self.seat_id = seat_id
     self.name = name if name is not None else self.__class__.__name__
@@ -23,6 +31,12 @@ class Agent:
       seed = AGENT_SEED_GENERATOR()
     self._seed = seed
     self.rng = random.Random(seed)
+
+  @classmethod
+  def __init_subclass__(cls):
+    # 将子类添加到注册表
+    cls.agent_name_to_cls[cls.__name__] = cls
+    super().__init_subclass__()
 
   def reset(self, seed: int | None = None) -> None:
     if seed is None:
@@ -89,4 +103,39 @@ class Agent:
 
 
 BaseAgent = TypeVar('BaseAgent', bound=Agent)
-__all__ = ["Agent", "BaseAgent"]
+
+
+class AgentBuilder(BaseModel):
+  """Simple factory for constructing agents used in simulations.
+  """
+
+  cls_name: str
+  seat_id: int
+  name: str | None = None
+  kwargs: dict | None = None  # evaluation=GreedyAgentEvaluationV1()
+  config: dict = {}  # gem_score=1.0, ...
+
+  @field_validator('kwargs', mode='after')  # mode='after' 确保在类型验证后执行
+  def set_kwargs_to_None(cls, v):
+    # 强制将 kwargs 设为 None，忽略 JSON 中的值
+    if v is not None:
+      evaluation = v.get("evaluation")
+      if evaluation is not None and hasattr(evaluation, 'config'):
+        return v
+    return None
+
+  def build(self) -> Agent:
+    """Instantiate the configured agent.
+
+    Returns an instance of the configured agent class. `seat_id` and `name`
+    are forwarded as keyword arguments, together with any extra `kwargs`.
+    """
+    if self.kwargs is None:
+      raise ValueError("AgentBuilder.kwargs must be set to build an agent")
+    agent_cls = Agent.agent_name_to_cls.get(self.cls_name)
+    if agent_cls is None:
+      raise ValueError(f"Unknown agent class name: {self.cls_name}")
+    return agent_cls(seat_id=self.seat_id, name=self.name, **self.kwargs)
+
+
+__all__ = ["Agent", "AgentBuilder", "BaseAgent"]

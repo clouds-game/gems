@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 from tqdm import tqdm
-from gems.agents.core import Agent, BaseAgent
+from gems.agents.core import Agent, AgentBuilder, BaseAgent
 from gems.consts import GameConfig
 from gems.engine import Engine, Replay
 from gems.state import GameState
@@ -32,6 +32,11 @@ class SimulationResult:
   def config(self) -> GameConfig:
     return self.engine.config
 
+@dataclass
+class SimulationSummary:
+  config: GameConfig
+  agent_builders: list[AgentBuilder]
+  results: list[SimulationResult]
 
 def run_simulations(n: int, config: GameConfig, agents: list[BaseAgent], debug: bool = False) -> list[SimulationResult]:
   """Run `n` independent games using `agents` for each seat.
