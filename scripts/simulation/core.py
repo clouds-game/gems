@@ -3,7 +3,7 @@
 from tqdm import tqdm
 from gems.agents.core import Agent
 from gems.consts import GameConfig
-from gems.engine import Engine
+from gems.engine import Engine, Replay
 from gems.state import GameState
 
 
@@ -29,29 +29,39 @@ def run_simulations(n: int, config: GameConfig, agents: list[Agent], debug: bool
   return engines, agent_metadata_list
 
 
-def replay_engine(engines: list[Engine]) -> tuple[list[list[GameState]], list[Engine]]:
+def export_to_replay(engine: Engine, agent_metadata: list[dict]) -> Replay:
+  replay = engine.export()
+  replay.metadata["agents"] = agent_metadata
+  return replay
+
+
+def replay_engine(replays: list[Replay]) -> tuple[list[list[GameState]], list[Engine]]:
   states_list: list[list[GameState]] = []
-  for engine in tqdm(engines, desc="replay game"):
-    states = engine.replay()
+
+  engines: list[Engine] = []
+  for replay in tqdm(replays, desc="replay game"):
+    states, engine = replay.replay()
     states_list.append(states)
+    engines.append(engine)
   return states_list, engines
 
-def save_engines(engines: list[Engine], output_file: Path, mode="a"):
-  output_file.parent.mkdir(parents=True, exist_ok=True)
-  with open(output_file, mode, encoding="utf-8") as f:
-    for e in engines:
-      json.dump(e.serialize(), f, ensure_ascii=False)
-      f.write("\n")
+
+# def save_engines(engines: list[Engine], output_file: Path, mode="a"):
+#   output_file.parent.mkdir(parents=True, exist_ok=True)
+#   with open(output_file, mode, encoding="utf-8") as f:
+#     for e in engines:
+#       json.dump(e.serialize(), f, ensure_ascii=False)
+#       f.write("\n")
 
 
-def load_engines(input_file: Path, start: int | None = None, end: int | None = None) -> list[Engine]:
-  with open(input_file, "r", encoding="utf-8") as f:
-    engines_data = [json.loads(line) for line in f]
-  if end is not None:
-    engines_data = engines_data[:end]
-  if start is not None:
-    engines_data = engines_data[start:]
-  res = []
-  for data in tqdm(engines_data, desc="Loading engines"):
-    res.append(Engine.deserialize(data))
-  return res
+# def load_engines(input_file: Path, start: int | None = None, end: int | None = None) -> list[Engine]:
+#   with open(input_file, "r", encoding="utf-8") as f:
+#     engines_data = [json.loads(line) for line in f]
+#   if end is not None:
+#     engines_data = engines_data[:end]
+#   if start is not None:
+#     engines_data = engines_data[start:]
+#   res = []
+#   for data in tqdm(engines_data, desc="Loading engines"):
+#     res.append(Engine.deserialize(data))
+#   return res

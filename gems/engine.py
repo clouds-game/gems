@@ -41,7 +41,6 @@ class Engine:
   roles_deck: list[Role]
   _rng: random.Random
   _action_history: list[Action]
-  _actions_to_replay: list[Action]
   _initial_assets: GameAssets
   def __init__(
       self,
@@ -72,7 +71,6 @@ class Engine:
     self._seed = seed
     self._all_noops_last_round = all_noops_last_round
     self._action_history = list(action_history) if action_history is not None else []
-    self._actions_to_replay = []
 
   @staticmethod
   def new(
@@ -129,52 +127,6 @@ class Engine:
     )
     return engine
 
-  def serialize(self) -> dict:
-    """Return a JSON-serializable dict describing this Engine.
-
-    The serialized form includes a minimal set of fields requested by
-    consumers/tests: number of players, player names, seed used to create
-    the RNG (if any), and the action history as a list of action dicts.
-    """
-
-    return {
-      'num_players': self._num_players,
-      'config': self.config.serialize(),
-      'names': self._names,
-      'seed': self._seed,
-      'action_history': [a.serialize() for a in self._action_history],
-    }
-
-  @classmethod
-  def deserialize(cls, d: dict) -> "Engine":
-    """Reconstruct an Engine from a dict produced by `serialize`.
-
-    This creates a fresh Engine via `Engine.new(...)` using the stored
-    num_players/names/seed and then repopulates the `action_history`
-    with deserialized Action objects. Note: the returned Engine is a
-    fresh instance (assets shuffled using the seed) and does not replay
-    the action history against the GameState.
-    """
-    num_players = d.get('num_players')
-    if num_players is None:
-      raise ValueError("deserialize requires 'num_players' field")
-    config_dict = d.get('config')
-    if config_dict is None:
-      raise ValueError("deserialize requires 'config' field")
-    config = GameConfig.deserialize(config_dict)
-    num_players = int(num_players)
-    names = d.get('names')
-    seed = d.get('seed', None)
-    if seed is not None:
-      seed = int(seed)
-    engine = cls.new(num_players=num_players, names=names, seed=seed, config=config)
-    raw_actions = d.get('action_history', []) or []
-    actions: list[Action] = []
-    for a in raw_actions:
-      actions.append(Action.deserialize(a))
-    # store as actions needing replay; caller may choose to call apply_replay()
-    engine._actions_to_replay = actions
-    return engine
 
   def export(self) -> "Replay":
     """Export this Engine's state and history as a Replay object."""
@@ -185,54 +137,9 @@ class Engine:
       action_history=self._action_history,
       metadata={
         'seed': self._seed,
-        **self._metadata.serialize(),
       },
     )
 
-  def replay(self, actions: Sequence[Action] | None = None) -> list[GameState]:
-    """Apply a sequence of actions to the engine, returning intermediate states.
-
-    Parameters:
-      actions: Optional sequence of `Action` objects to apply in order. If
-        omitted (or None) the engine will apply any actions stored in the
-        internal replay buffer (`_actions_to_replay`), which is the list of
-        actions produced by `Engine.deserialize`.
-
-    Behavior:
-      - The first element of the returned list is the current state *before*
-        any actions are applied.
-      - Each subsequent element is the new immutable `GameState` after actions in one round has been applied.
-      - Successfully applied actions are appended to `_action_history`.
-      - When replaying (actions is None) the `_actions_to_replay` buffer is
-        cleared after successful application.
-
-    Returns:
-      list[GameState]: `[state_before, state_after_actions_of_round_1, ...]`.
-
-    Raises:
-      ValueError: if any action cannot be applied to the current state.
-    """
-    to_apply: list[Action]
-    if actions is None:
-      # use (and then clear) replay buffer
-      to_apply = list(self._actions_to_replay)
-    else:
-      to_apply = list(actions)
-
-    assert len(to_apply) % self._num_players == 0
-
-    states: list[GameState] = [self._state]
-
-    for actions_one_round in [to_apply[i:i + self._num_players] for i in range(0, len(to_apply), self._num_players)]:
-      for action in actions_one_round:
-        self._state = action.apply(self._state)
-        self.advance_turn()
-        self._action_history.append(action)
-      states.append(self._state)
-    if actions is None:
-      # clear replay buffer only when we consumed it implicitly
-      self._actions_to_replay = []
-    return states
 
   @staticmethod
   def create_game(num_players: int = 4, names: list[str] | None = None, config: GameConfig | None = None) -> GameState:
@@ -407,3 +314,19 @@ class Replay(BaseModel):
   player_names: list[str]
   action_history: list[Action]
   metadata: dict[str, Any] # seed and others
+
+  def replay(self) -> tuple[list[GameState], Engine]:
+    """Replay the stored action history, returning the list of GameStates."""
+    engine = Engine.new(
+      num_players=len(self.player_names),
+      names=self.player_names,
+      seed=self.metadata.get('seed', None),
+      config=self.config,
+      )
+    states: list[GameState] = [engine.get_state()]
+    for actions_one_round in [self.action_history[i:i + engine._num_players] for i in range(0, len(self.action_history), engine._num_players)]:
+      for action in actions_one_round:
+        engine._state = action.apply(engine._state)
+        engine.advance_turn()
+      states.append(engine.get_state())
+    return states, engine

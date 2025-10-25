@@ -1,7 +1,7 @@
 # %%
 from _common import RES_DIR
 from scripts.simulation.utils import load_and_replay
-from simulation import get_simulation_config, load_simulation_result, replay_engine, load_engines, play_and_save, load_and_replay, plot_rounds, plot_scores, EXTRACTORS
+from simulation import get_simulation_config, replay_engine, load_replays, play_and_save, load_and_replay, plot_rounds, plot_scores, EXTRACTORS
 from gems.agents.core import AGENT_METADATA_HISTORY_ROUND, Agent
 import json
 
@@ -98,7 +98,7 @@ from gems.engine import Engine
 
 
 def test_target_agent():
-  config = TargetAgentEvaluationV1Config(gem_score= 11.0)
+  config = TargetAgentEvaluationV1Config(gem_score=11.0)
   evaluation = TargetAgentEvaluationV1(config=config)
   agents = [TargetAgent(seat_id=0, evaluation=evaluation, debug=True)]
   agents[0].reset(seed=42)
