@@ -8,7 +8,7 @@ from gems.agents.space_sample import SpaceSampleAgent
 from gems.agents.target import TargetAgent
 from gems.consts import GameConfig
 from gems.gym.action_space import ActionSpace
-from simulation.core import SimulationResult
+from simulation.core import SimulationResult, SimulationSummary
 from simulation.extractors import multiplayer_extract_average_scores, single_player_extract_average_scores
 from simulation.plot import plot_winrate
 from simulation.utils import get_win_counts
@@ -24,11 +24,11 @@ SIMULATION_NUM = 5
 # %%
 
 
-
 def init_agents(agent_cls: Sequence[type[BaseAgent]]) -> list[BaseAgent]:
   return [cls(seat_id=i, name=None) for i, cls in enumerate(agent_cls)]
 
-def play(agents: list[BaseAgent], all_visiable: bool = False, count: int = SIMULATION_NUM, output_dir = Simulation_Dir):
+
+def play(agents: list[BaseAgent], all_visiable: bool = False, count: int = SIMULATION_NUM, output_dir=Simulation_Dir):
   if all_visiable:
     game_config = GameConfig(num_players=len(agents), card_visible_count=100)
   else:
@@ -41,14 +41,15 @@ def play(agents: list[BaseAgent], all_visiable: bool = False, count: int = SIMUL
   play_and_save(agents, game_config, count=count, output_file=output_file)
   return output_file
 
+
 agents_one_player = [
-  (AgentClass,)
-  for AgentClass in CANDIDATES
+    (AgentClass,)
+    for AgentClass in CANDIDATES
 ]
 agents_two_players = [
-  (AgentClass1, AgentClass2)
-  for AgentClass1 in CANDIDATES
-  for AgentClass2 in CANDIDATES
+    (AgentClass1, AgentClass2)
+    for AgentClass1 in CANDIDATES
+    for AgentClass2 in CANDIDATES
 ]
 
 files: list[Path] = []
@@ -60,42 +61,46 @@ for agent_cls in agents_one_player + agents_two_players:
 # play([SpaceSampleAgent(seat_id=0, action_space=ActionSpace(GameConfig(1)), name="SpaceSampleAgent", max_samples=50)], count=10, output_dir=Simulation_Dir)
 
 # %%
-results = [load_and_replay(f) for f in files]
+summarys = [load_and_replay(f) for f in files]
 
 # %%
-def analysis(results: list[SimulationResult], labels: list[str], output_dir: Path):
-  states_list = [result.states for result in results]
-  if results[0].num_players == 1:
+
+
+def analysis(summary: SimulationSummary, labels: list[str], output_dir: Path):
+  states_list = [result.states for result in summary.results]
+  if summary.game_config.num_players == 1:
     scores_list = [single_player_extract_average_scores(states_list)]
   else:
     scores_list = multiplayer_extract_average_scores(states_list)
   fig = plot_scores(scores_list, labels=labels)
   fig.savefig(output_dir / f"average_scores.png")
 
-  finish_rounds = [result.num_rounds for result in results]
+  finish_rounds = [result.num_rounds for result in summary.results]
 
   fig = plot_rounds(finish_rounds)
   fig.savefig(output_dir / f"finish_round_distribution.png")
 
-  win_counts = get_win_counts([result.engine for result in results])
-  fig = plot_winrate(win_counts, total_games=len(results), player_labels=labels)
+  win_counts = get_win_counts([result.engine for result in summary.results])
+  fig = plot_winrate(win_counts, total_games=len(summary.results), player_labels=labels)
   fig.savefig(output_dir / f"winrate.png")
 
-for (result, file) in zip(results, files):
-  filename = result[0].filename
+
+for (summary, file) in zip(summarys, files):
+  filename = summary.filename
   if filename is None:
     filename = file.stem
   else:
     filename = Path(filename).stem
-  print(f"Loaded {len(result)} simulations from {filename}")
-  labels = [f"Player {i}" for i in range(result[0].engine.config.num_players)]
+
+  print(f"Loaded {len(summary.results)} simulations from {filename}")
+  labels = [agent_builder.name for agent_builder in summary.agent_builders]
   output_dir = Output_Dir / filename
   if not output_dir.exists():
     output_dir.mkdir(parents=True, exist_ok=True)
   if (output_dir / "average_scores.png").exists():
     print(f"Analysis for {filename} exists, skip.")
     continue
-  num_players = result[0].engine.config.num_players
-  analysis(result, labels=labels, output_dir=output_dir)
+  num_players = summary.game_config.num_players
+  analysis(summary, labels=labels, output_dir=output_dir)
 
 # %%

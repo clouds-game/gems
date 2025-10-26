@@ -112,6 +112,13 @@ class Engine:
     engine._action_history = []
     return engine
 
+  def step(self, action: Action) -> GameState:
+    """Apply the given action to the current GameState, updating engine state."""
+    self._state = action.apply(self._state)
+    self._action_history.append(action)
+    self.advance_turn()
+    return self._state
+
   def clone(self, seed: int | None = None) -> "Engine":
     engine = Engine(
         num_players=self._num_players,

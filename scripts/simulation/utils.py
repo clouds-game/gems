@@ -14,7 +14,7 @@ from gems.agents.target import TargetAgent
 from gems.consts import GameConfig
 from gems.engine import Engine, Replay
 from gems.state import GameState
-from .core import SimulationResult, export_to_replay, apply_replays, run_simulations
+from .core import SimulationResult, SimulationSummary, export_to_replay, apply_replays, run_simulations
 
 PathLike: TypeAlias = str | Path
 
@@ -31,36 +31,51 @@ def play_and_save(agents: list[BaseAgent], game_config: GameConfig, *, count: in
   if output_file.exists():
     return
   results = run_simulations(count, game_config, agents)
-  replays = [r.replay for r in results]
-  save_replays(replays, output_file)
+
+  simulation_summary = SimulationSummary(
+      game_config=game_config,
+      agent_builders=[agent.builder() for agent in agents],
+      filename=str(output_file),
+      results=results
+  )
+  save_replays(simulation_summary, output_file)
 
 
-def load_and_replay(path: PathLike, *, start: int | None = None, end: int | None = None) -> list[SimulationResult]:
-  replays = load_replays(path, start=start, end=end)
-  return apply_replays(replays)
+def load_and_replay(path: PathLike, *, start: int | None = None, end: int | None = None) -> SimulationSummary:
+  summary, replays = load_replays(path, start=start, end=end)
+  results = apply_replays(replays)
+  summary.results = results
+  return summary
 
 
-def save_replays(replays: list[Replay], output_file: PathLike, mode="a"):
+def save_replays(summary: SimulationSummary, output_file: PathLike, mode="a"):
   output_file = Path(output_file)
   output_file.parent.mkdir(parents=True, exist_ok=True)
+  replays = [r.replay for r in summary.results]
   with open(output_file, mode, encoding="utf-8") as f:
+    summary_jsonl = summary.model_dump_json()
+    f.write(f"# {summary_jsonl}\n")
     for r in replays:
       jsonl = r.model_dump_json()
       f.write(f"{jsonl}\n")
 
 
-def load_replays(input_file: PathLike, start: int | None = None, end: int | None = None) -> list[Replay]:
+def load_replays(input_file: PathLike, start: int | None = None, end: int | None = None) -> tuple[SimulationSummary, list[Replay]]:
   with open(input_file, "r", encoding="utf-8") as f:
     lines = list(f)
+  summary_line, lines = lines[0], lines[1:]
+  summary_line = summary_line.lstrip("# ").strip()
+  summary = SimulationSummary.model_validate_json(summary_line)
+  summary.filename = str(input_file)
   if end is not None:
     lines = lines[:end]
   if start is not None:
     lines = lines[start:]
-  res = []
+  replays = []
   for data in tqdm(lines, desc="Loading replays"):
     r = Replay.model_validate_json(data)
-    res.append(r)
-  return res
+    replays.append(r)
+  return summary, replays
 
 
 # TODO change to list

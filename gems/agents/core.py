@@ -4,7 +4,7 @@ Follows the contract described in AGENTS.md. Keep this file minimal.
 All Python code in this repo uses 2-space indentation.
 """
 from dataclasses import asdict, dataclass
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 import random
 from collections.abc import Sequence
 from typing import Any, ClassVar, TypeVar
@@ -91,6 +91,19 @@ class Agent:
     """
     return {}
 
+  def builder(self) -> "AgentBuilder":
+    """Return an AgentBuilder that can reconstruct this agent.
+    """
+    evaluation = getattr(self, "evaluation", None)
+
+    return AgentBuilder(
+        cls_name=self.__class__.__name__,
+        seat_id=self.seat_id,
+        name=self.name,
+        kwargs={"evaluation": evaluation} if evaluation is not None else None,
+        config=asdict(evaluation.config) if evaluation is not None else {},
+    )
+
   @classmethod
   def print_metadata_round(cls, agents_metadata: list[dict[str, str]], round: int) -> None:
     print("Agent Metadata:")
@@ -111,18 +124,11 @@ class AgentBuilder(BaseModel):
 
   cls_name: str
   seat_id: int
-  name: str | None = None
-  kwargs: dict | None = None  # evaluation=GreedyAgentEvaluationV1()
+  name: str
+  kwargs: dict | None = Field(default=None, exclude=True)
+  # evaluation=GreedyAgentEvaluationV1()
   config: dict = {}  # gem_score=1.0, ...
 
-  @field_validator('kwargs', mode='after')  # mode='after' 确保在类型验证后执行
-  def set_kwargs_to_None(cls, v):
-    # 强制将 kwargs 设为 None，忽略 JSON 中的值
-    if v is not None:
-      evaluation = v.get("evaluation")
-      if evaluation is not None and hasattr(evaluation, 'config'):
-        return v
-    return None
 
   def build(self) -> Agent:
     """Instantiate the configured agent.

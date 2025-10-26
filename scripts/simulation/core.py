@@ -1,7 +1,9 @@
 
 
 from dataclasses import dataclass
+from pydantic import BaseModel, Field
 from tqdm import tqdm
+from gems.actions import Action  # for SimulationSummary.model_rebuild()
 from gems.agents.core import Agent, AgentBuilder, BaseAgent
 from gems.consts import GameConfig
 from gems.engine import Engine, Replay
@@ -14,7 +16,6 @@ class SimulationResult:
   engine: Engine
   replay: Replay
   agent_metadata: list[dict]
-  filename: str | None
 
   @property
   def action_history(self) -> list:
@@ -32,11 +33,16 @@ class SimulationResult:
   def config(self) -> GameConfig:
     return self.engine.config
 
-@dataclass
-class SimulationSummary:
-  config: GameConfig
+
+class SimulationSummary(BaseModel, arbitrary_types_allowed=True):
+  game_config: GameConfig
   agent_builders: list[AgentBuilder]
-  results: list[SimulationResult]
+  filename: str | None = Field(exclude=True, default=None)
+  results: list[SimulationResult] = Field(exclude=True, default=[])
+
+
+SimulationSummary.model_rebuild()
+
 
 def run_simulations(n: int, config: GameConfig, agents: list[BaseAgent], debug: bool = False) -> list[SimulationResult]:
   """Run `n` independent games using `agents` for each seat.
@@ -63,10 +69,8 @@ def run_simulations(n: int, config: GameConfig, agents: list[BaseAgent], debug: 
         engine=engine,
         replay=replay,
         agent_metadata=agent_metadata,
-        filename=None,
     ))
   return result
-
 
 
 def export_to_replay(engine: Engine, agent_metadata: list[dict]) -> Replay:
@@ -82,12 +86,11 @@ def apply_replays(replays: list[Replay]) -> list[SimulationResult]:
   return result
 
 
-def apply_replay(replay: Replay, *, filename: str | None = None) -> SimulationResult:
+def apply_replay(replay: Replay) -> SimulationResult:
   states, engine = replay.replay()
   return SimulationResult(
       states=states,
       engine=engine,
       replay=replay,
       agent_metadata=replay.metadata.get("agents", []),
-      filename=filename,
   )
