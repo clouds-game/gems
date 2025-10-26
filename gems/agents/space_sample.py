@@ -50,33 +50,46 @@ class SpaceSampleAgent(Agent):
     if not legal_actions:
       raise ValueError("No legal actions available")
 
+    state.print_summary()
     legal = set(legal_actions)
 
     # Try sampling from the structured ActionSpace and decode to Action.
     # Return the first sample that equals one of the provided legal actions.
+    actions: list[Action] = []
     for i in range(self.max_samples):
       try:
         sample = cast(ActionDict, self.action_space.sample())
+        # if actions is not None:
+        #   sample['type'][...] = 2  # BUY_CARD
         action = self.action_space.decode(sample)
         if isinstance(action, BuyCardActionGold):
           assert action.idx is not None
           card = state.get_card(action.idx, seat_id=self.seat_id)
           action = action.normalize(card)
-      except Exception:
+      except Exception as e:
+        print(e)
         # Sampling/decoding may fail for invalid intermediate samples; try again.
         continue
 
       # print(f"Sampled action: [{i}] {action}")
-      if action not in legal:
-        continue
+      # if action not in legal:
+      #   continue
 
       if action.type == ActionType.NOOP:
         continue
 
       if not action.check(state):
-        print(f"Sampled action failed legality check: {action}")
+        if action.type == ActionType.BUY_CARD:
+          print(f"Sampled action failed legality check: {action}")
         continue
 
+      actions.append(action)
+
+    for action in actions:
+      if action.type == ActionType.BUY_CARD:
+        return action
+
+    for action in actions:
       return action
 
     # Fallback: pick uniformly among legal actions using agent RNG.

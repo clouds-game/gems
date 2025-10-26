@@ -4,8 +4,10 @@ from pathlib import Path
 from _common import RES_DIR
 from gems.agents.greedy import GreedyAgent
 from gems.agents.random import RandomAgent
+from gems.agents.space_sample import SpaceSampleAgent
 from gems.agents.target import TargetAgent
 from gems.consts import GameConfig
+from gems.gym.action_space import ActionSpace
 from simulation.core import SimulationResult
 from simulation.extractors import multiplayer_extract_average_scores, single_player_extract_average_scores
 from simulation.plot import plot_winrate
@@ -55,6 +57,9 @@ for agent_cls in agents_one_player + agents_two_players:
   files.append(play(init_agents(agent_cls), all_visiable=True))
 
 # %%
+# play([SpaceSampleAgent(seat_id=0, action_space=ActionSpace(GameConfig(1)), name="SpaceSampleAgent", max_samples=50)], count=10, output_dir=Simulation_Dir)
+
+# %%
 results = [load_and_replay(f) for f in files]
 
 # %%
@@ -93,4 +98,4 @@ for (result, file) in zip(results, files):
   num_players = result[0].engine.config.num_players
   analysis(result, labels=labels, output_dir=output_dir)
 
-#%%
+# %%

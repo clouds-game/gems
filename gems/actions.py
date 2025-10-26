@@ -649,7 +649,7 @@ class BuyCardActionGold(BuyCardAction):
 
   def normalize(self, card: Card) -> 'BuyCardAction':
     payment = self._get_payment(card)
-    return BuyCardAction.create(self.idx, self.card, payment=payment)
+    return BuyCardAction.create(self.idx, self.card or card, payment=payment)
 
 @dataclass(frozen=True)
 class ReserveCardAction(Action):
